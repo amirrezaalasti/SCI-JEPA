@@ -1,0 +1,13 @@
+# Paper A. Tested on macOS (Apple M5 Pro, MPS) with Python 3.9.6.
+torch==2.8.0
+numpy==2.0.2
+scipy==1.13.1
+scikit-learn==1.6.1
+pyarrow==21.0.0
+sentence-transformers==5.1.2
+transformers==4.57.6
+# notebook
+ipykernel
+nbconvert
+pandas
+matplotlib
