@@ -19,6 +19,7 @@ p.add_argument("--out", required=True)
 p.add_argument("--n-papers", type=int, default=2000)
 p.add_argument("--arm", default="reference")
 p.add_argument("--speed", default="fast", choices=["fast", "gpu"])
+p.add_argument("--size", default="local", help="model size (config.SIZES); batch 64 for tiny/local, else 128")
 A = p.parse_args()
 os.makedirs(A.out, exist_ok=True)
 
@@ -30,8 +31,8 @@ from sci_jepa.models.model import PaperAModel, to_device  # noqa: E402
 from sci_jepa.training.train import _autocast, _fp32  # noqa: E402
 
 speed = C.FAST if A.speed == "fast" else C.FAST_GPU
-cfg = C.PaperAConfig().override(**C.SIZES["local"], max_papers=A.n_papers, split_dir=A.split, epochs=1.0, device="auto",
-                                batch_size=64, rows_per_shard=100, index_dir=A.index, out_dir=A.out, **speed)
+cfg = C.PaperAConfig().override(**C.SIZES[A.size], max_papers=A.n_papers, split_dir=A.split, epochs=1.0, device="auto",
+                                batch_size=64 if A.size in ("tiny", "local") else 128, rows_per_shard=100, index_dir=A.index, out_dir=A.out, **speed)
 cfg = cfg.override(**dict(C.EXPERIMENTS["BENCH"])[A.arm])
 gi = get_index(cfg)
 if gi.comp_x.shape[1] != cfg.feat_dim:
@@ -90,11 +91,11 @@ for b in batches[:4]:
 torch.cuda.synchronize(); t = time.time()
 for b in batches[4:]:
     step(b)
-torch.cuda.synchronize(); print(f"step: {(time.time() - t) / (len(batches) - 4) * 1e3:.1f} ms ({A.arm}, {A.speed})")
+torch.cuda.synchronize(); print(f"step: {(time.time() - t) / (len(batches) - 4) * 1e3:.1f} ms ({A.arm}, {A.speed}, {A.size})")
 with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True) as prof:
     for b in batches[4:10]:
         step(b)
     torch.cuda.synchronize()
 print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=30, max_name_column_width=50))
 print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=20, max_name_column_width=50))
-prof.export_chrome_trace(os.path.join(A.out, f"trace_{A.arm}_{A.speed}.json"))
+prof.export_chrome_trace(os.path.join(A.out, f"trace_{A.arm}_{A.speed}_{A.size}.json"))

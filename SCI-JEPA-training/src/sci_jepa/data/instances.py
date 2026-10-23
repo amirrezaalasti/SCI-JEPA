@@ -613,7 +613,7 @@ def collate_views(views, is_mask=None):
              "deg": _pad(views, "deg", T, 0, np.int64),
              "comp": _pad(views, "comp", T, -1, np.int64),
              "pad": torch.as_tensor(np.stack([np.arange(T) >= len(v["type"]) for v in views]))}
-    rel = np.zeros((len(views), T, T), dtype=np.int64)
+    rel = np.zeros((len(views), T, T), dtype=np.uint8)   # ids < 256: 8x less to copy; to_device widens them
     for b, v in enumerate(views):
         n = len(v["type"]); rel[b, :n, :n] = v["rel"]
     batch["rel"] = torch.as_tensor(rel)

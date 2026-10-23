@@ -209,11 +209,10 @@ def run(cfg, create_dataset, create_model, train, test, evaluator=None):
         else:
             sharp = False
             optimizer = torch.optim.Adam(
-                model.parameters(), lr=cfg.train.lr, weight_decay=cfg.train.wd)
+                model.parameters(), lr=cfg.train.lr, weight_decay=cfg.train.wd, **_fused(cfg, model))
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
                                                                factor=cfg.train.lr_decay,
-                                                               patience=cfg.train.lr_patience,
-                                                               verbose=True)
+                                                               patience=cfg.train.lr_patience)  # verbose= was removed in torch 2.7
 
         start_outer = time.time()
         per_epoch_time = []
@@ -329,6 +328,12 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
+def _fused(cfg, model):
+    """{'fused': True} when cfg.train.fused_optim is on and the model sits on CUDA."""
+    on = bool(getattr(cfg.train, 'fused_optim', False)) and torch.cuda.is_available()
+    return {'fused': True} if on and all(p.is_cuda for p in model.parameters()) else {}
+
+
 def k_fold(dataset, folds=10):
     skf = StratifiedKFold(folds, shuffle=True, random_state=12345)
     train_indices, test_indices = [], []
@@ -382,11 +387,10 @@ def run_k_fold(cfg, create_dataset, create_model, train, test, evaluator=None, k
             model = create_model(cfg).to(cfg.device)
 
             optimizer = torch.optim.Adam(
-                model.parameters(), lr=cfg.train.lr, weight_decay=cfg.train.wd)
+                model.parameters(), lr=cfg.train.lr, weight_decay=cfg.train.wd, **_fused(cfg, model))
             scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
                                                                    factor=cfg.train.lr_decay,
-                                                                   patience=cfg.train.lr_patience,
-                                                                   verbose=True)
+                                                                   patience=cfg.train.lr_patience)  # verbose= was removed in torch 2.7
 
             start_outer = time.time()
             per_epoch_time = []

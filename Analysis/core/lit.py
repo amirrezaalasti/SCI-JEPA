@@ -26,20 +26,22 @@ def configure_sharing() -> None:
 
 
 class GraphDataModule(L.LightningDataModule):
-    def __init__(self, train_set, val_set, test_set, batch_size: int, num_workers: int):
+    def __init__(self, train_set, val_set, test_set, batch_size: int, num_workers: int,
+                 prefetch_factor: int = 2):
         super().__init__()
         self.train_set = train_set
         self.val_set = val_set
         self.test_set = test_set
         self.batch_size = int(batch_size)
         self.num_workers = int(num_workers)
+        self.prefetch_factor = int(prefetch_factor)
 
     def _loader(self, dataset, shuffle: bool):
         workers = self.num_workers
         extra = {}
         if workers > 0:
             extra["persistent_workers"] = True
-            extra["prefetch_factor"] = 2
+            extra["prefetch_factor"] = self.prefetch_factor
         return DataLoader(
             dataset,
             batch_size=self.batch_size,
@@ -90,10 +92,14 @@ class GraphJepaLitModule(L.LightningModule):
         params = self.model.parameters()
         lr = float(self.cfg.train.lr)
         weight_decay = float(self.cfg.train.wd)
+        # fused kernels need every parameter on CUDA; Lightning moves the model before this call
+        fused = {"fused": True} if (
+            bool(getattr(self.cfg.train, "fused_optim", False)) and torch.cuda.is_available()
+            and all(p.is_cuda for p in self.model.parameters())) else {}
         if self.use_asam or str(self.cfg.train.optimizer) == "SGD":
-            optimizer = torch.optim.SGD(params, lr=lr, momentum=0.9, weight_decay=weight_decay)
+            optimizer = torch.optim.SGD(params, lr=lr, momentum=0.9, weight_decay=weight_decay, **fused)
         else:
-            optimizer = torch.optim.Adam(params, lr=lr, weight_decay=weight_decay)
+            optimizer = torch.optim.Adam(params, lr=lr, weight_decay=weight_decay, **fused)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer,
             mode="min",

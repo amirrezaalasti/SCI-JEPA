@@ -140,7 +140,8 @@ def _fit_split(cfg, seed, run_index, group, experiment, create_dataset, create_m
         val_names=["val_loss", "test_loss"],
         track_best=True,
     )
-    data = GraphDataModule(train_set, val_set, test_set, cfg.train.batch_size, cfg.num_workers)
+    data = GraphDataModule(train_set, val_set, test_set, cfg.train.batch_size, cfg.num_workers,
+                          int(getattr(cfg.train, "prefetch_factor", 2)))
     trainer.fit(lit, datamodule=data)
     _barrier(trainer)
     summary = None
@@ -192,7 +193,8 @@ def _fit_kfold(cfg, seed, run_index, group, experiment, create_dataset, create_m
             val_names=["test_loss"],
             track_best=False,
         )
-        data = GraphDataModule(train_set, None, test_set, cfg.train.batch_size, cfg.num_workers)
+        data = GraphDataModule(train_set, None, test_set, cfg.train.batch_size, cfg.num_workers,
+                          int(getattr(cfg.train, "prefetch_factor", 2)))
         trainer.fit(lit, datamodule=data)
         _barrier(trainer)
         if trainer.is_global_zero:

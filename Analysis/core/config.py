@@ -65,6 +65,15 @@ def set_cfg(cfg):
     # 0 disables clipping. The papers run sets this to 1.
     cfg.train.grad_clip = 0.0
     cfg.train.precision = '32-true'
+    # Speed switches (docs/training-optimization.md). None of them changes the loss.
+    # The VICReg representation reuses the online backbone pass instead of running it twice.
+    cfg.train.reuse_online_pass = True
+    # EMA target update as one torch._foreach call instead of a Python loop over parameters.
+    cfg.train.foreach_ema = True
+    # Fused Adam/SGD kernels on CUDA.
+    cfg.train.fused_optim = True
+    # Batches each DataLoader worker prepares ahead (Lightning backend).
+    cfg.train.prefetch_factor = 2
     # SmoothL1 beta. 0.5 matches ZINC/DD/IMDB/REDDIT; MUTAG/PROTEINS/EXP use 1.
     cfg.train.smooth_l1_beta = 0.5
     cfg.train.sim_weight = 1.0
