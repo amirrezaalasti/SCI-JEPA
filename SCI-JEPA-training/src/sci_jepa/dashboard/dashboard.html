@@ -851,7 +851,7 @@ async function benchTab(force){
 const _ch=n=>{let s=0;for(let k=1;k<=Math.round(n);k++)s+=1/k;return s/Math.round(n);};
 
 // ---------------------------------------------------------------- compare two runs
-const MODE_NAME={section:"KUs (sections)",paper:"one KU per paper",paper_masked:"paper as one text"};
+const MODE_NAME={section:"KUs (sections)",paper:"one KU per paper",paper_masked:"paper as one text","graph-jepa":"Graph-JEPA"};
 let cmpInit=false;
 function cmpPick(){   // default pair: newest experiment whose arms differ in ku_mode, else the two newest runs
   const names=RUNS.map(r=>r.name),D=names.map(n=>ALL[`runs/${n}/live.json`]).filter(Boolean);

@@ -1,5 +1,6 @@
 import os
 import argparse
+from pathlib import Path
 from yacs.config import CfgNode as CN
 
 
@@ -47,8 +48,28 @@ def set_cfg(cfg):
     cfg.train.mlpmixer_dropout = 0.
     # A lower bound on the learning rate.
     cfg.train.min_lr = 1e-5
-    # optimizer
+    # optimizer: Adam, SGD, or ASAM (ASAM is a sharpness-aware step on top of SGD)
     cfg.train.optimizer = 'Adam'
+    # lightning (default) or legacy (the original hand-written loops)
+    cfg.train.backend = 'lightning'
+    # auto selects vicreg for papers and distance for the TU / ZINC scripts
+    cfg.train.objective = 'auto'
+    # full updates every EMA pair; encoder updates only the context encoder
+    cfg.train.ema_scope = 'full'
+    # 0 keeps the single GPU in cfg.device. >1 turns on DDP across that many GPUs.
+    cfg.train.devices = 0
+    # auto or ddp
+    cfg.train.strategy = 'auto'
+    # one seed per GPU, sequential seeds when this is false
+    cfg.train.parallel_runs = False
+    # 0 disables clipping. The papers run sets this to 1.
+    cfg.train.grad_clip = 0.0
+    cfg.train.precision = '32-true'
+    # SmoothL1 beta. 0.5 matches ZINC/DD/IMDB/REDDIT; MUTAG/PROTEINS/EXP use 1.
+    cfg.train.smooth_l1_beta = 0.5
+    cfg.train.sim_weight = 1.0
+    # import path of the training script, filled in for multi-process seeds
+    cfg.train.entry = ''
     # Multiscale training
     cfg.train.multiscale = False
     # ── anti-collapse (VICReg) regularizer weights ──
@@ -118,6 +139,24 @@ def set_cfg(cfg):
     cfg.jepa.dist = 0
     # EMA target-network momentum (anti-collapse)
     cfg.jepa.ema_momentum = 0.996
+    # Momentum reached at the last optimization step
+    cfg.jepa.ema_momentum_end = 0.999
+
+    # ------------------------------------------------------------------------ #
+    # Data and logging
+    # ------------------------------------------------------------------------ #
+    cfg.data = CN()
+    # Full dataset root for this run. Empty uses SCIJEPA_DATA_ROOT or Analysis/dataset.
+    cfg.data.root = ''
+
+    cfg.logging = CN()
+    cfg.logging.root = 'runs'
+    cfg.logging.tensorboard = True
+    cfg.logging.jsonl = True
+    # Folder with the existing dashboard (index.html, runs.json, runs/).
+    # Empty uses SCIJEPA_DASHBOARD_ROOT or
+    # SCI-JEPA-training/runs/paper_a_results/dashboard.
+    cfg.logging.dashboard_root = ''
 
     return cfg
 
@@ -125,6 +164,26 @@ def set_cfg(cfg):
 # Principle means that if an option is defined in a YACS config object,
 # then your program should set that configuration option using cfg.merge_from_list(opts) and not by defining,
 # for example, --train-scales as a command line argument that is then used to set cfg.TRAIN.SCALES.
+
+
+def resolve_config(name: str) -> str:
+    """Find a YAML config from the repo root or from ``Analysis/``."""
+    if not name:
+        return name
+    raw = Path(name)
+    analysis = Path(__file__).resolve().parents[1]
+    candidates = []
+    if raw.is_absolute():
+        candidates.append(raw)
+    candidates.extend([
+        Path.cwd() / name,
+        analysis / name,
+        analysis / "train" / "configs" / raw.name,
+    ])
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
+    return name
 
 
 def update_cfg(cfg, args_str=None):
@@ -145,8 +204,9 @@ def update_cfg(cfg, args_str=None):
     cfg = cfg.clone()
 
     # Update from config file
-    if os.path.isfile(args.config):
-        cfg.merge_from_file(args.config)
+    config_path = resolve_config(args.config) if args.config else ""
+    if config_path and os.path.isfile(config_path):
+        cfg.merge_from_file(config_path)
 
     # Update from command line
     cfg.merge_from_list(args.opts)
