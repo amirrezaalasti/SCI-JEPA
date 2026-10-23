@@ -43,6 +43,38 @@ The same entry from the uv environment:
 uv run graph-jepa train papers device 0
 ```
 
+### Changing hyperparameters
+
+Defaults live in `Analysis/core/config.py`; each dataset's YAML in `Analysis/train/configs/` overrides them. On the command line, the common options have flags and every other key is set as `KEY VALUE` or `KEY=VALUE`:
+
+```bash
+uv run graph-jepa train papers --epochs 50 --lr 3e-4 metis.n_patches 16 jepa.num_targets=4
+uv run graph-jepa train papers --help          # all flags
+uv run graph-jepa options papers ema           # keys matching "ema", their values and help
+uv run graph-jepa config papers --lr 3e-4 > my.yaml   # resolved config, nothing runs
+uv run graph-jepa train papers --config my.yaml
+```
+
+Order of precedence: `config.py`, the dataset YAML, `--config`, `KEY VALUE` pairs, then flags. A mistyped key stops the run and suggests the closest key. `python -m train.<dataset>` accepts the same arguments, so the SLURM scripts' `--config FILE device 0` still works.
+
+Lightning Trainer switches sit under `trainer.*` (unset keys keep Lightning's default):
+
+```bash
+uv run graph-jepa train papers --fast-dev-run                 # one batch through train and val
+uv run graph-jepa train papers trainer.limit_train_batches 0.1 trainer.profiler simple
+uv run graph-jepa train papers trainer.max_time 00:23:30:00   # stop cleanly before a SLURM limit
+```
+
+### Checkpoints and resuming
+
+Each fit writes `checkpoints/[fold<k>/]last.ckpt` in its run directory after every epoch (`train.save_last`). With a fixed run name, a rerun continues where it stopped; finished folds and seeds return straight to their probe:
+
+```bash
+uv run graph-jepa train papers --name papers-lr3e4 --lr 3e-4 --resume auto
+```
+
+`--resume path/to/last.ckpt` resumes a single split run with one seed.
+
 `train.backend` defaults to `lightning`. Set `train.backend legacy` to use the original loops. Papers use the VICReg objective (`train.objective: vicreg`); the TU and ZINC scripts use the distance objective. The target network is updated with `train.ema_scope: full` on every step.
 
 One process can use several GPUs, or several seeds can run at once:
@@ -69,11 +101,19 @@ Paper A already has the dashboard in `SCI-JEPA-training` (`sci-jepa serve`, or `
 Each seed also keeps a local copy:
 
 ```
-runs/<dataset-timestamp>/seed-<seed>/
+runs/<name or dataset-timestamp>/seed-<seed>/
   events.jsonl
   config.yaml
   summary.json
-  tb/                 # TensorBoard
+  tb/[latest|fold<k>]/  # TensorBoard: curves, HPARAMS tab
+  csv/                  # with --loggers tensorboard,csv
+  checkpoints/
+```
+
+`logging.loggers` (flag `--loggers`) picks Lightning loggers: `tensorboard` (default), `csv`, `wandb`, `mlflow`. W&B and MLflow are not installed by default (`uv pip install wandb` or `mlflow`); their project or experiment name is `logging.project`. Every logger receives the full flattened config as hyperparameters, and the probe results at the end of each fit as `final/*` metrics, so TensorBoard's HPARAMS tab can sort runs by `final/balanced_acc` or `final/mae`. Per-step loss is logged as `train_loss_step` every `trainer.log_every_n_steps` steps. Compare all runs at once:
+
+```bash
+uv run graph-jepa tensorboard        # --logdir runs/, port 6006 (PORT=... to change)
 ```
 
 Open the dashboard:

@@ -12,6 +12,7 @@ import torch
 import lightning as L
 from torch_geometric.loader import DataLoader
 
+from core.config import flatten_cfg
 from core.objectives import OBJECTIVES, ema_bounds, ema_update, interpolate_momentum
 
 
@@ -71,6 +72,8 @@ class GraphJepaLitModule(L.LightningModule):
     def __init__(self, model, cfg, objective: str, ema_scope: str, monitor: str, val_names: list[str]):
         super().__init__()
         self.automatic_optimization = False
+        # Every config key, flattened, so loggers record the run's hyperparameters.
+        self.save_hyperparameters(flatten_cfg(cfg))
         self.model = model
         self.cfg = cfg
         self.objective_name = objective
@@ -117,6 +120,26 @@ class GraphJepaLitModule(L.LightningModule):
             },
         }
 
+    def on_save_checkpoint(self, checkpoint) -> None:
+        checkpoint["graph_jepa"] = {
+            "best_score": self.best_score,
+            "best_state": self.best_state,
+            "stopped": self._stopped,
+            "sched_epoch": self._sched_epoch,
+        }
+
+    def on_load_checkpoint(self, checkpoint) -> None:
+        state = checkpoint.get("graph_jepa") or {}
+        self.best_score = float(state.get("best_score", self.best_score))
+        self.best_state = state.get("best_state", self.best_state)
+        self._stopped = bool(state.get("stopped", False))
+        self._sched_epoch = int(state.get("sched_epoch", -1))
+
+    def on_train_start(self) -> None:
+        # a resumed run that had already hit min_lr stays stopped
+        if self._stopped:
+            self.trainer.should_stop = True
+
     def on_fit_start(self) -> None:
         if not self.use_asam:
             return
@@ -135,6 +158,10 @@ class GraphJepaLitModule(L.LightningModule):
     def _log_step(self, out: dict, prefix: str) -> None:
         sync = self._sync()
         batch_size = int(out["batch_size"])
+        if prefix == "train":
+            # written every trainer.log_every_n_steps steps
+            self.log("train_loss_step", out["pred_loss"], on_step=True, on_epoch=False,
+                     batch_size=batch_size, add_dataloader_idx=False)
         self.log(
             f"{prefix}_loss",
             out["pred_loss"],

@@ -169,6 +169,10 @@ class Experiment:
         text = cfg.dump() if hasattr(cfg, "dump") else str(cfg)
         (self.directory / "config.yaml").write_text(text, encoding="utf-8")
         self.state["config"].update(_public_config(cfg))
+        if hasattr(cfg, "items"):
+            from core.config import flatten_cfg
+
+            self.state["hparams"] = flatten_cfg(cfg)
         self._flush()
 
     def event(self, kind: str, **payload) -> dict:

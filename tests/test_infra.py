@@ -100,3 +100,73 @@ def test_objective_math():
     cfg.dataset = "ZINC"
     train.__module__ = "train.zinc"
     assert resolve_plan(cfg, train)[0] == "distance"
+
+
+def test_update_cfg_accepts_flags_pairs_and_equals():
+    from core.config import update_cfg
+
+    cfg = update_cfg(
+        set_cfg(CN()),
+        "--epochs 3 --lr 1e-4 train.batch_size 64 metis.n_patches=16 "
+        "--loggers tensorboard,csv trainer.limit_train_batches 10 --fast-dev-run",
+    )
+    assert cfg.train.epochs == 3
+    assert cfg.train.lr == 1e-4
+    assert cfg.train.batch_size == 64
+    assert cfg.metis.n_patches == 16
+    assert cfg.logging.loggers == ["tensorboard", "csv"]
+    assert cfg.trainer.limit_train_batches == 10
+    assert cfg.trainer.fast_dev_run == 1
+
+
+def test_update_cfg_keeps_the_slurm_syntax():
+    from core.config import update_cfg
+
+    cfg = update_cfg(set_cfg(CN()), "--config papers.yaml device 0")
+    assert cfg.dataset == "papers"
+    assert cfg.device == 0
+
+
+def test_update_cfg_suggests_a_key_for_typos():
+    import pytest
+
+    from core.config import update_cfg
+
+    with pytest.raises(SystemExit, match="train.batch_size"):
+        update_cfg(set_cfg(CN()), "batch_size 4")
+
+
+def test_every_trainer_key_has_help():
+    from core.config import flatten_cfg, option_docs
+
+    docs = option_docs()
+    keys = [key for key in flatten_cfg(set_cfg(CN())) if key.startswith(("trainer.", "logging."))]
+    assert keys
+    assert all(docs.get(key) for key in keys), [key for key in keys if not docs.get(key)]
+
+
+def test_trainer_flags_skip_unset_keys():
+    from core.engine import _trainer_flags
+
+    cfg = set_cfg(CN())
+    cfg.trainer.max_time = "00:01:00:00"
+    flags = _trainer_flags(cfg)
+    assert flags == {"max_time": "00:01:00:00", "log_every_n_steps": 50}
+
+
+def test_loggers_write_one_version_per_fold(tmp_path):
+    from core.engine import _checkpoint_dir, _loggers
+
+    cfg = set_cfg(CN())
+    cfg.logging.loggers = ["tensorboard", "csv"]
+    experiment = Experiment(
+        tmp_path / "runs" / "g" / "seed-1",
+        {"group": "g", "run_id": "seed-1", "seed": 1, "dataset": "toy"},
+        dashboard=tmp_path / "dashboard",
+    )
+    experiment.fold = 2
+    names = [(type(logger).__name__, logger.version) for logger in _loggers(cfg, experiment)]
+    assert names == [("TensorBoardLogger", "fold2"), ("CSVLogger", "fold2")]
+    assert _checkpoint_dir(experiment).name == "fold2"
+    cfg.logging.tensorboard = False
+    assert [type(logger).__name__ for logger in _loggers(cfg, experiment)] == ["CSVLogger"]

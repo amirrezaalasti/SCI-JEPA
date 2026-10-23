@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -16,6 +17,7 @@ from lightning.pytorch import seed_everything
 from lightning.pytorch.strategies import DDPStrategy
 
 from core.callbacks import DashboardCallback
+from core.config import flatten_cfg
 from core.experiment import Experiment
 from core.lit import GraphDataModule, GraphJepaLitModule, configure_sharing
 from core.objectives import resolve_plan
@@ -44,6 +46,7 @@ def run_lightning(cfg, create_dataset, create_model, train, test, evaluator=None
 
     seeds = seeds_for(cfg, "kfold" if mode == "kfold" else "split")
     group = _group_name(cfg)
+    _check_resume(cfg, seeds, mode)
     print(
         f"Lightning trainer | dataset={cfg.dataset} | objective={objective} | "
         f"ema={ema_scope} | seeds={seeds} | group={group}"
@@ -142,7 +145,7 @@ def _fit_split(cfg, seed, run_index, group, experiment, create_dataset, create_m
     )
     data = GraphDataModule(train_set, val_set, test_set, cfg.train.batch_size, cfg.num_workers,
                           int(getattr(cfg.train, "prefetch_factor", 2)))
-    trainer.fit(lit, datamodule=data)
+    trainer.fit(lit, datamodule=data, ckpt_path=_resume_path(cfg, experiment))
     _barrier(trainer)
     summary = None
     if trainer.is_global_zero:
@@ -159,6 +162,7 @@ def _fit_split(cfg, seed, run_index, group, experiment, create_dataset, create_m
             lit.model, train_set, test_set, cfg.train.batch_size, device, tag=f"run{run_index}-test"
         )
         summary = _timing_summary(callback, seed, run_index, extra=probe)
+        _log_final(trainer, cfg, summary)
     _barrier(trainer)
     return summary
 
@@ -195,7 +199,7 @@ def _fit_kfold(cfg, seed, run_index, group, experiment, create_dataset, create_m
         )
         data = GraphDataModule(train_set, None, test_set, cfg.train.batch_size, cfg.num_workers,
                           int(getattr(cfg.train, "prefetch_factor", 2)))
-        trainer.fit(lit, datamodule=data)
+        trainer.fit(lit, datamodule=data, ckpt_path=_resume_path(cfg, experiment))
         _barrier(trainer)
         if trainer.is_global_zero:
             save_model(
@@ -217,6 +221,7 @@ def _fit_kfold(cfg, seed, run_index, group, experiment, create_dataset, create_m
             row = _timing_summary(callback, seed, run_index, extra=probe)
             row["fold"] = fold
             fold_rows.append(row)
+            _log_final(trainer, cfg, row)
             print(
                 f"Fold {fold}, Seconds/epoch: {row['seconds_per_epoch']:.4f} | "
                 f"balanced_acc={probe['balanced_acc']:.4f}"
@@ -258,32 +263,138 @@ def _fit_kfold(cfg, seed, run_index, group, experiment, create_dataset, create_m
 
 def _make_trainer(cfg, model, experiment, monitor, val_names, track_best):
     import lightning as L
-    from lightning.pytorch.loggers import TensorBoardLogger
 
     lit = GraphJepaLitModule(
         model, cfg, str(cfg.train.objective), str(cfg.train.ema_scope), monitor, val_names
     )
     lit.track_best = track_best
     callback = DashboardCallback(experiment)
+    callbacks = [callback]
+    if bool(getattr(cfg.train, "save_last", True)):
+        from lightning.pytorch.callbacks import ModelCheckpoint
+
+        callbacks.append(ModelCheckpoint(
+            dirpath=str(_checkpoint_dir(experiment)), save_top_k=0, save_last=True,
+        ))
     accelerator, devices, strategy = _devices(cfg)
-    logger = False
-    if bool(getattr(cfg.logging, "tensorboard", True)):
-        logger = TensorBoardLogger(save_dir=str(experiment.directory), name="tb", version="latest")
     trainer = L.Trainer(
         accelerator=accelerator,
         devices=devices,
         strategy=strategy,
         max_epochs=int(cfg.train.epochs),
         precision=str(getattr(cfg.train, "precision", "32-true")),
-        logger=logger,
-        callbacks=[callback],
-        enable_checkpointing=False,
+        logger=_loggers(cfg, experiment) or False,
+        callbacks=callbacks,
+        enable_checkpointing=len(callbacks) > 1,
         num_sanity_val_steps=0,
-        log_every_n_steps=1,
         inference_mode=False,
         default_root_dir=str(experiment.directory),
+        **_trainer_flags(cfg),
     )
     return lit, callback, trainer
+
+
+def _trainer_flags(cfg) -> dict:
+    """``cfg.trainer`` keys that are set, passed straight to ``L.Trainer``."""
+    section = getattr(cfg, "trainer", None)
+    if section is None:
+        return {"log_every_n_steps": 1}
+    return {key: value for key, value in section.items() if value is not None}
+
+
+def _loggers(cfg, experiment) -> list:
+    """Lightning loggers from ``logging.loggers``. All write under the run directory."""
+    names = [str(name).lower() for name in getattr(cfg.logging, "loggers", ["tensorboard"])]
+    if not bool(getattr(cfg.logging, "tensorboard", True)):
+        names = [name for name in names if name != "tensorboard"]
+    version = "latest" if experiment.fold is None else f"fold{experiment.fold}"
+    directory = str(experiment.directory)
+    project = str(getattr(cfg.logging, "project", "graph-jepa"))
+    loggers = []
+    for name in names:
+        if name == "tensorboard":
+            from lightning.pytorch.loggers import TensorBoardLogger
+
+            loggers.append(TensorBoardLogger(
+                save_dir=directory, name="tb", version=version, default_hp_metric=False,
+            ))
+        elif name == "csv":
+            from lightning.pytorch.loggers import CSVLogger
+
+            loggers.append(CSVLogger(save_dir=directory, name="csv", version=version))
+        elif name == "wandb":
+            from lightning.pytorch.loggers import WandbLogger
+
+            run_name = experiment.name if experiment.fold is None else f"{experiment.name}__{version}"
+            loggers.append(WandbLogger(
+                project=project, name=run_name, group=str(experiment.meta.get("group")),
+                save_dir=directory,
+            ))
+        elif name == "mlflow":
+            from lightning.pytorch.loggers import MLFlowLogger
+
+            uri = str(getattr(cfg.logging, "mlflow_uri", "") or "")
+            if not uri:
+                uri = (Path(directory).parents[1] / "mlruns").resolve().as_uri()
+            run_name = experiment.name if experiment.fold is None else f"{experiment.name}__{version}"
+            loggers.append(MLFlowLogger(experiment_name=project, run_name=run_name, tracking_uri=uri))
+        else:
+            raise SystemExit(
+                f"Unknown logger `{name}` in logging.loggers. Use tensorboard, csv, wandb or mlflow."
+            )
+    return loggers
+
+
+def _log_final(trainer, cfg, summary) -> None:
+    """Probe results as metrics, so TensorBoard's HPARAMS tab can sort runs by them."""
+    metrics = {
+        f"final/{key}": float(value) for key, value in summary.items()
+        if isinstance(value, (int, float)) and not isinstance(value, bool)
+        and key not in {"seed", "run_index", "fold"}
+    }
+    for logger in trainer.loggers:
+        if type(logger).__name__ == "TensorBoardLogger":
+            logger.log_hyperparams(flatten_cfg(cfg), metrics)
+        else:
+            logger.log_metrics(metrics, step=int(trainer.global_step))
+        logger.save()
+        if type(logger).__name__ == "WandbLogger":
+            # one W&B run per fold or seed
+            logger.experiment.finish()
+
+
+def _checkpoint_dir(experiment) -> Path:
+    directory = experiment.directory / "checkpoints"
+    if experiment.fold is not None:
+        directory = directory / f"fold{experiment.fold}"
+    return directory
+
+
+def _check_resume(cfg, seeds, mode) -> None:
+    value = str(getattr(cfg.train, "resume", "") or "")
+    if value == "auto" and not getattr(cfg, "logfile", None):
+        print("train.resume auto needs a fixed run name (--name / logfile). Starting fresh.")
+    elif value and value != "auto" and (len(seeds) > 1 or mode == "kfold"):
+        raise SystemExit(
+            "A checkpoint path resumes one split run with one seed. "
+            "Use train.resume auto (with --name) for several seeds or k-fold."
+        )
+
+
+def _resume_path(cfg, experiment):
+    value = str(getattr(cfg.train, "resume", "") or "")
+    if not value:
+        return None
+    if value == "auto":
+        path = _checkpoint_dir(experiment) / "last.ckpt"
+        if not path.is_file():
+            return None
+    else:
+        path = Path(value)
+        if not path.is_file():
+            raise SystemExit(f"train.resume: checkpoint not found: {value}")
+    print(f"Resuming from {path}")
+    return str(path)
 
 
 def _devices(cfg):
