@@ -96,9 +96,10 @@ with open(os.path.join(OUT, "summary.csv"), "w", newline="") as fh:
                 if a is None and b is None:
                     continue
                 w.writerow([g, c, name, unit, a, b, (b / a) if a and b else None])
-LABELS = ["previous", "optimized", "optimized+lightning", "optimized+lightning-ddp4"]
+LABELS = ["previous", "optimized", "optimized+lightning"] + sorted({r["label"] for r in rows if "-ddp" in r["label"]})
 NICE = {"previous": "Previous (own loop)", "optimized": "Optimized (own loop)",
-        "optimized+lightning": "Optimized + Lightning, 1 GPU", "optimized+lightning-ddp4": "Optimized + Lightning, 4 GPUs"}
+        "optimized+lightning": "Optimized + Lightning, 1 GPU",
+        **{l: f"Optimized + Lightning, {l.split('-ddp')[1]} GPUs" for l in LABELS if "-ddp" in l}}
 md = ["# Paper A training: previous vs optimized code, own loop vs PyTorch Lightning\n",
       "Change columns are relative to the previous code. For the 4-GPU run, energy and power are the sum over "
       "the 4 GPUs and MFU is relative to 4x the peak.\n"]

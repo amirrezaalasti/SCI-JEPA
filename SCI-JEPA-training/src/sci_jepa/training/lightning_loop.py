@@ -15,6 +15,7 @@ evaluation run on rank 0; the other ranks return None.
 
 Not supported here (train_one falls back to the native loop): resuming from a checkpoint, the E5 contrast loss.
 """
+import os
 import time
 
 import numpy as np
@@ -135,6 +136,20 @@ def fit_lightning(*, model, cfg, gi, dev, seed, log, live, opt, sched, scaler, p
                                "grad_norm": gnorm, **T._step_stats(out, batch, cfg)})
             return None
 
+        def on_train_start(self):
+            if int(self.trainer.world_size) != world:   # e.g. a SLURM job with 1 task: Lightning would run 1 process
+                raise RuntimeError(f"Lightning runs {self.trainer.world_size} process(es) for devices={world}")
+
+        def on_train_end(self):
+            if world > 1:                               # replicas must hold identical weights after every step
+                with torch.no_grad():
+                    ck = torch.stack([sum(p.detach().double().sum() for p in self.model.context.parameters()),
+                                      sum(p.detach().double().sum() for p in self.model.predictor.parameters())])
+                allck = self.trainer.strategy.all_gather(ck)
+                if self.global_rank == 0:
+                    spread = float((allck - allck[0]).abs().max())
+                    log(f"  [lightning] weight checksums of the {allck.shape[0]} replicas: max difference {spread:.3e}")
+
         def on_train_batch_end(self, outputs, item, batch_idx):
             step = item[0]
             if step not in epoch_ends:
@@ -169,11 +184,18 @@ def fit_lightning(*, model, cfg, gi, dev, seed, log, live, opt, sched, scaler, p
         import os
         rank = int(os.environ.get("LOCAL_RANK", 0))
         from sci_jepa.data.instances import Sampler
-        sampler = Sampler(gi, cfg, "train", seed + 7_919 * rank)
+        offset = 0 if os.environ.get("SCIJEPA_DDP_SAME_DATA") else 7_919 * rank   # debug: every rank the same data
+        sampler = Sampler(gi, cfg, "train", seed + offset)
         plan_fn = _rank_plan(plan_fn, rank, world)
+    else:
+        offset = 0
     batches = T._batches(sampler, plan_fn, n_steps, cfg.batch_size // world, prefetch, 0, None, workers,
-                         seed + 7_919 * rank)
-    strategy = DDPStrategy(find_unused_parameters=True) if world > 1 else "auto"
+                         seed + offset)
+    # LightningEnvironment: Lightning starts the other ranks itself. Inside a SLURM job it would otherwise read the
+    # world size from SLURM (ntasks) and, with one task, silently train on ONE process.
+    from lightning.pytorch.plugins.environments import LightningEnvironment
+    strategy = DDPStrategy(find_unused_parameters=False, cluster_environment=LightningEnvironment()) \
+        if world > 1 else "auto"
     trainer = Lg.Trainer(accelerator="gpu" if dev.type == "cuda" else "cpu", devices=world, strategy=strategy,
                          precision="32-true", max_epochs=1, max_steps=-1, logger=False,
                          enable_checkpointing=False, enable_progress_bar=False, enable_model_summary=False,

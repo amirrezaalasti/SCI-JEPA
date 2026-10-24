@@ -7,8 +7,9 @@
 #   BUNDLE=/path/to/sci-jepa-bench-kit OUT=/path/to/results bash $BUNDLE/bench_kit.sh
 #   (on SLURM: sbatch --gres=gpu:4 --cpus-per-task=32 --time=02:00:00 --wrap "BUNDLE=... OUT=... bash .../bench_kit.sh")
 #
-# Optional: PYTHON (default python), WORKERS (batch worker processes, default 7), CONCURRENT=1 (also run 4
-# trainings at once, one per GPU, when >= 4 GPUs are visible), QUICK=1 (only the S model, batch 128).
+# Optional: PYTHON (default python), WORKERS (batch worker processes, default 7), CONCURRENT=1 (also run one
+# training per visible GPU at once, when >= 2 GPUs are visible), QUICK=1 (only the S and M models, batch 128).
+# With >= 2 visible GPUs, one run is also trained on min(GPUs, 4) GPUs at once (PyTorch Lightning DDP).
 set -uo pipefail
 BUNDLE="${BUNDLE:?set BUNDLE to the unpacked kit folder}"
 PY="${PYTHON:-python}"
@@ -33,6 +34,7 @@ run() {   # label size batch speed epochs [tag] [trainer] [devices]
 }
 
 NG=$("${PY}" -c "import torch; print(torch.cuda.device_count())")
+NDDP=$(( NG >= 4 ? 4 : NG ))                          # GPUs for the one-run-on-several-GPUs test
 if [[ "${QUICK:-0}" == 1 ]]; then
   CONFIGS=("S 128 gpu 1" "M 128 gpu 0.5")
 else
@@ -44,15 +46,15 @@ for c in "${CONFIGS[@]}"; do
   run optimized ${c}                                  # optimized code, its own training loop
   run optimized ${c} "" lightning 1                   # optimized code, PyTorch Lightning loop, 1 GPU
   set -- ${c}
-  if [[ "${NG}" -ge 4 && "$1" != "local" ]]; then
-    run optimized ${c} "" lightning 4                 # one run on 4 GPUs (Lightning DDP, global batch split)
+  if [[ "${NDDP}" -ge 2 && "$1" != "local" ]]; then
+    run optimized ${c} "" lightning ${NDDP}           # one run on several GPUs (Lightning DDP, global batch split)
   fi
 done
 
-if [[ "${CONCURRENT:-1}" == 1 && "${NG}" -ge 4 ]]; then
+if [[ "${CONCURRENT:-1}" == 1 && "${NG}" -ge 2 ]]; then
   for label in previous optimized; do      # Paper A scales across GPUs by running arms / seeds side by side
-    echo "=== ${label}: 4 trainings at once, one per GPU $(date +%T)"
-    for g in 0 1 2 3; do
+    echo "=== ${label}: ${NDDP} trainings at once, one per GPU $(date +%T)"
+    for g in $(seq 0 $(( NDDP - 1 ))); do
       CUDA_VISIBLE_DEVICES=$g WORKERS=$(( WORKERS )) run ${label} S 128 gpu 0.5 "concurrent${g}" &
     done
     wait
