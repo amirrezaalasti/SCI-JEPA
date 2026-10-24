@@ -20,6 +20,7 @@ p.add_argument("--n-papers", type=int, default=2000)
 p.add_argument("--arm", default="reference")
 p.add_argument("--speed", default="fast", choices=["fast", "gpu"])
 p.add_argument("--size", default="local", help="model size (config.SIZES); batch 64 for tiny/local, else 128")
+p.add_argument("--label", default="", help="code version label: also writes ops_<label>_<arm>_<speed>_<size>.json")
 A = p.parse_args()
 os.makedirs(A.out, exist_ok=True)
 
@@ -99,3 +100,11 @@ with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_sh
 print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=30, max_name_column_width=50))
 print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=20, max_name_column_width=50))
 prof.export_chrome_trace(os.path.join(A.out, f"trace_{A.arm}_{A.speed}_{A.size}.json"))
+if A.label:                                             # per-operation device time, for before/after breakdowns
+    import json
+    ops = [{"name": e.key, "self_device_us": getattr(e, "self_device_time_total", getattr(e, "self_cuda_time_total", 0)),
+            "device_us": getattr(e, "device_time_total", getattr(e, "cuda_time_total", 0)), "calls": e.count,
+            "self_cpu_us": e.self_cpu_time_total} for e in prof.key_averages()]
+    json.dump({"label": A.label, "arm": A.arm, "speed": A.speed, "size": A.size, "steps": 6,
+               "gpu": torch.cuda.get_device_name(0), "ops": ops},
+              open(os.path.join(A.out, f"ops_{A.label}_{A.arm}_{A.speed}_{A.size}.json"), "w"), indent=1)

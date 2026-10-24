@@ -209,6 +209,8 @@ class PaperAConfig:
                                        #   than batch_workers=0
     tf32: bool = False                 # TF32 matrix products on Ampere+ GPUs (fp32 parts of the model)
     fused_adamw: bool = False          # fused (single-kernel) AdamW on CUDA: same update
+    trainer: str = "native"            # native (train.py's own loop) | lightning (training/lightning_loop.py)
+    devices: int = 1                   # trainer=lightning: GPUs for ONE run (DDP; the global batch is split)
     targets_per_instance: int = 1      # >1: multi-target training (I-JEPA-style): besides the anchor, hide one
                                        #   KU in each of k-1 neighbouring papers (leak-safe masked, own target
                                        #   view). An epoch stays one pass of PREDICTED KUs, so a run has k x

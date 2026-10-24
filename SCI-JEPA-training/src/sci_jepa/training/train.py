@@ -362,7 +362,7 @@ def _fp32(out):
 # ---- resume a training run across jobs (cfg.resume_runs; run_experiment passes ckpt_path) --------------------
 CKPT_VERSION = 1
 _CKPT_IGNORE = ("out_dir", "model_dir", "index_dir", "device", "resume_runs", "ckpt_every", "llm_models",
-                "batch_workers", "tf32", "fused_adamw")   # speed settings: a run may resume with other values
+                "batch_workers", "tf32", "fused_adamw", "trainer", "devices")   # speed settings: a run may resume with other values
 
 
 def _ckpt_key(cfg, seed):
@@ -534,8 +534,26 @@ def train_one(cfg, gi, seed, log=print, live=None, save_dir=None, ckpt_path=None
             "elapsed": time.time() - t0, "saved": time.strftime("%Y-%m-%d %H:%M:%S"),
             "job": os.environ.get("SLURM_JOB_ID")})
 
-    batches = iter(()) if train_done else _batches(sampler, plan_fn, n_steps, cfg.batch_size, prefetch, start,
-                                                         snap, workers, seed)
+    use_lightning = cfg.trainer == "lightning" and not train_done
+    if use_lightning:                                  # the same loop on PyTorch Lightning (training/lightning_loop.py)
+        from sci_jepa.training import lightning_loop as LL
+        ok, why = LL.supported(cfg, ckpt_path)
+        if not ok:
+            log(f"  [lightning] not used ({why}): native training loop")
+            use_lightning = False
+    if use_lightning:
+        res = LL.fit_lightning(model=model, cfg=cfg, gi=gi, dev=dev, seed=seed, log=log, live=live, opt=opt,
+                               sched=sched, scaler=scaler, params=params, sampler=sampler, plan_fn=plan_fn,
+                               n_steps=n_steps, prefetch=prefetch, workers=workers, epoch_ends=epoch_ends,
+                               epoch_of=epoch_of, track_best=track_best, shapes=shapes, gen=gen, t0=t0,
+                               history=history, epoch_results=epoch_results, report=report, prog=prog)
+        if res is None:                                # another rank of a multi-GPU run: rank 0 evaluates
+            return None
+        best_state, stopped_epoch, step, phase = res
+        batches = iter(())
+    else:
+        batches = iter(()) if train_done else _batches(sampler, plan_fn, n_steps, cfg.batch_size, prefetch, start,
+                                                       snap, workers, seed)
     for step, phase_now, insts, cpu_batch, sampler_state in batches:
         if phase_now != phase and cfg.mask_schedule == "sequential":
             log(f"  [mask] step {step}: phase -> masking '{phase_now}'"
