@@ -1,0 +1,5 @@
+# papers dropped from releases and from the next training run (retracted / withdrawn / removal requests)
+1703.08257  # retracted (train)
+/mnt/sdb/filtered tar files/arxiv-8-25/pdfs_000234_JSON.tar!minio-pdfs/output_RA-012-D2RA90036J/RA-012-D2RA90036J.json  # retracted (train)
+/mnt/sdb/filtered tar files/arxiv-8-25/pdfs_000425_JSON.tar!minio-pdfs/output_PMC8024871_bsr-41-bsr20180562-RET/PMC8024871_bsr-41-bsr20180562-RET.json  # retracted (train)
+/mnt/sdb/filtered tar files/arxiv-8-25/pdfs_000506_JSON.tar!minio-pdfs/output_PMC10920077_MOL2-18-778/PMC10920077_MOL2-18-778.json  # retracted (val)

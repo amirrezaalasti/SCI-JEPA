@@ -89,14 +89,18 @@ tunnel() {    # $1 = job id
     [[ -f "${SJ}" ]] || sleep 5
   done
   PORT=$(grep -o '"port": [0-9]*' "${SJ}" | grep -o '[0-9]*$')
-  # login nodes are shared: skip ports someone else listens on
-  while ss -ltn 2>/dev/null | grep -q "127.0.0.1:${LPORT} "; do LPORT=$((LPORT + 1)); done
+  # login nodes are shared: skip ports someone else listens on (ss by full path: tmux sessions may lack /usr/sbin)
+  local SS; SS="$(command -v ss || echo /usr/sbin/ss)"
+  free_port() { while "${SS}" -ltn 2>/dev/null | grep -q "127.0.0.1:${LPORT} "; do LPORT=$((LPORT + 1)); done; }
+  free_port
   echo "================================================================"
   echo " dashboard: ${NODE}:${PORT}  ->  http://localhost:${LPORT}/"
   echo " VS Code opens it in your browser (Ports tab: 'Paper A dashboard')."
   echo " Ctrl-C closes the tunnel only; the job keeps running. Reconnect: bash cluster/grete/run_paper_a.sh tunnel ${JOB}"
   echo "================================================================"
   while [[ -n "$(squeue -h -j "${JOB}" 2>/dev/null)" ]]; do   # re-opened if the connection drops; ends with the job
+    local OLD="${LPORT}"; free_port
+    [[ "${LPORT}" != "${OLD}" ]] && echo " port ${OLD} is taken now: dashboard -> http://localhost:${LPORT}/"
     ssh -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new \
         -L "127.0.0.1:${LPORT}:localhost:${PORT}" "${NODE}"
     sleep 5
