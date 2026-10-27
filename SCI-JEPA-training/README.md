@@ -64,6 +64,8 @@ sci-jepa evaluate results runs/paper_a_results/BENCH   # 6. leaderboard + hypoth
 
 `sci-jepa run` prints the dashboard address (`http://localhost:8765/`). Results, trained models and figures go to `runs/paper_a_results/`. On a Slurm cluster, use `cluster/grete/run_paper_a.sh` ([docs/cluster_grete.md](docs/cluster_grete.md)); it also splits a run over several GPUs and opens the dashboard in your local browser.
 
+To share the dashboard with the team, it is also hosted on Vercel behind a team password: `scripts/push_dashboard.py` pushes the dashboard folder from a login node every minute. See [deploy/vercel/README.md](deploy/vercel/README.md).
+
 Graph-JEPA pretraining in [`Analysis/`](../Analysis/README.md) uses the same dashboard. Those runs are Lightning, write `runs/<name>/live.json` into `runs/paper_a_results/dashboard`, and show up in All runs and in Training dynamics. Start them with `uv run graph-jepa train papers` from the repository root (the `sci-jepa` command stays this package).
 
 ## Configuration

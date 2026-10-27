@@ -39,3 +39,5 @@ graphify-out/.graphify_analysis.json
 graphify-out/.graphify_labels.pending.json
 graphify-out/.graphify_root
 .graphify/
+
+meeting*
