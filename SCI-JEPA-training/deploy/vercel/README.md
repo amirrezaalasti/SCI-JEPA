@@ -9,35 +9,54 @@ Production: https://scijepa-dashboard.vercel.app (Vercel project `scijepa-dashbo
 ## How data gets there
 
 ```
-Grete login node                                    Vercel
-runs/paper_a_results/dashboard/  ── push_dashboard.py ──>  /api/push ──> Upstash Redis
-  runs.json, runs/*/live.json,      (every 60 s, only                       │
-  infra/live.json, graphs/*.html,    changed files, gzip)                   v
-  + squeue output                                     browser <── CDN <── /api/manifest, /api/f
+training process (any cluster)   ── sci_jepa/dashboard/push.py ──┐
+  runs/paper_a_results/dashboard/   (thread in every run,          │
+  runs.json, runs/*/live.json, ...   every 30 s + at exit)         ├─> /api/push ──> Upstash Redis
+Grete login node                  ── scripts/push_dashboard.py ───┘                    │
+  (compute nodes have no internet:  (started by run_paper_a.sh                         v
+   the login node pushes instead)    submit, exits with the jobs)  browser <── CDN <── /api/manifest, /api/f
 ```
 
-Compute nodes have no internet, so `scripts/push_dashboard.py` runs on a login node and reads the
-dashboard folder that training already writes on the shared file system. Training code and job scripts
-are unchanged.
+**Every run updates the site by itself.** When `SCIJEPA_PUSH_URL` and `SCIJEPA_PUSH_TOKEN` are set in the
+environment of a training job, each run (`LiveRun`) starts a background thread that uploads changed dashboard
+files every30 s and once more when the  run ends. Several shard processes writing one folder share the work:
+only the one holding `<dashboard>/.autopush.lock` uploads. Upload errors are logged and retried with back-off;
+they never stop training. `SCIJEPA_AUTOPUSH=0` turns it off, `SCIJEPA_PUSH_EVERY` sets the interval.
+
+On Grete the compute nodes have no internet (`COMPUTE_HAS_INTERNET=0` in `site.env`), so
+`bash cluster/grete/run_paper_a.sh submit ...` starts `scripts/push_dashboard.py --until-idle` on the login
+node instead (once; it exits when none of your jobs is left; log `${LOGS}/push_dashboard.log`), and the jobs
+run with `SCIJEPA_AUTOPUSH=0`.
 
 In the browser, `static/hosted.js` answers the unchanged pages' `fetch("runs.json")` and
 `fetch("runs/<name>/live.json")` from the synced copies. Every file version has its own URL, so the CDN
 serves repeated polls and Redis is read about once per version. This keeps usage inside the free plans.
 Long `history` arrays in `live.json` are thinned to 1,500 rows before upload; local files are never changed.
 
-## Run the sync on the cluster
+## Credentials
 
 ```bash
-# once: put these in ~/.bashrc on the login node (values in deploy/vercel/.env.secrets, ask the project lead)
+# in ~/.bashrc on the cluster (values in deploy/vercel/.env.secrets, ask the project lead);
+# sbatch --export=ALL carries them into the jobs
 export SCIJEPA_PUSH_URL=https://scijepa-dashboard.vercel.app
 export SCIJEPA_PUSH_TOKEN=<PUSH_TOKEN>
-
-# then, from SCI-JEPA-training/, inside tmux so it keeps running
-python3 scripts/push_dashboard.py                                  # default folder, every 60 s
-python3 scripts/push_dashboard.py /path/to/dashboard --squeue-args "-A <account>"
 ```
 
-The header shows "synced N s ago". It turns orange after 10 minutes without a push.
+By hand (for example a results folder copied lsewheere): `python3 scripts/push_dashboard.py /path/to/dashboard`
+(every 60 s; `--once` for a single push). The header shows "synced N s ago". It turns orange after 10 minutes
+without a push.
+
+## Earlier runs from job logs
+
+Runs that predate the hosted site, or whose dashboard folder is gone, can be rebuilt from their SLURM logs:
+
+```bash
+python3 scripts/import_logs.py ../log /tmp/archive                  # archive/<run>/live.json + runs_archive.json
+python3 scripts/push_dashboard.py /tmp/archive --once --no-squeue
+```
+
+They are listed before the live runs (names start with `log-`) with their loss curves, per-epoch validation and
+final test line. They live outside `runs.json`, so new runs never drop them, and `--prune` never deletes them.
 
 ## Deploy and settings
 

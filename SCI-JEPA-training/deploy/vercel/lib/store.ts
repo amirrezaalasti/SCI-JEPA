@@ -14,6 +14,16 @@ export const MANIFEST = "dash:m";
 export const NOTES = "dash:notes";
 export const fileKey = (p: string) => "dash:f:" + p;
 
+/** The manifest as {path: version}. Without automatic deserialization HGETALL can come back as the flat
+ *  Redis reply [field, value, ...] (an empty hash is []), so both shapes are accepted. */
+export async function readManifest(): Promise<Record<string, string>> {
+  const raw = (await redis.hgetall(MANIFEST)) as unknown;
+  if (!Array.isArray(raw)) return (raw as Record<string, string>) || {};
+  const out: Record<string, string> = {};
+  for (let i = 0; i + 1 < raw.length; i += 2) out[String(raw[i])] = String(raw[i + 1]);
+  return out;
+}
+
 /** Relative dashboard paths only: runs/x/live.json, graphs/codebase.html, cluster/squeue.json. */
 export function validPath(p: unknown): p is string {
   return typeof p === "string" && p.length > 0 && p.length <= 300 &&

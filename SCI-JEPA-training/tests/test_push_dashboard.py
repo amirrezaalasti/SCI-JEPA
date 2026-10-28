@@ -1,4 +1,4 @@
-"""Unit tests of scripts/push_dashboard.py (the cluster -> Vercel sync); no network."""
+"""Unit tests of sci_jepa/dashboard/push.py (the cluster -> Vercel sync, scripts/push_dashboard.py); no network."""
 import base64
 import gzip
 import importlib.util
@@ -7,7 +7,7 @@ import os
 from types import SimpleNamespace
 
 _spec = importlib.util.spec_from_file_location(
-    "push_dashboard", os.path.join(os.path.dirname(__file__), "..", "scripts", "push_dashboard.py"))
+    "push_dashboard", os.path.join(os.path.dirname(__file__), "..", "src", "sci_jepa", "dashboard", "push.py"))
 pd = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(pd)
 
@@ -79,7 +79,8 @@ def test_restart_skips_files_already_hosted(tmp_path):
 
 def test_prune_is_opt_in(tmp_path):
     root = _dash(tmp_path)
-    remote = {"runs/gone/live.json": "abc", "cluster/squeue.json": "def"}
+    remote = {"runs/gone/live.json": "abc", "cluster/squeue.json": "def",
+              "archive/log-x/live.json": "0a", "runs_archive.json": "0b"}
     _, deleted = pd.one_round(str(root), FakePusher(), dict(remote), {}, OPTS)
     assert deleted == []
     _, deleted = pd.one_round(str(root), FakePusher(), dict(remote), {}, SimpleNamespace(**{**vars(OPTS), "prune": True}))
@@ -91,3 +92,25 @@ def test_squeue_parsing(monkeypatch):
     monkeypatch.setattr(pd.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0, stdout=out, stderr=""))
     snap = pd.squeue_snapshot("-u me")
     assert [j["state"] for j in snap["jobs"]] == ["RUNNING", "PENDING"] and snap["jobs"][1]["reason"] == "(Priority)"
+
+
+def test_autopush_needs_credentials(tmp_path, monkeypatch):
+    monkeypatch.delenv("SCIJEPA_PUSH_URL", raising=False)
+    assert pd.start_autopush(str(tmp_path)) is None
+    monkeypatch.setenv("SCIJEPA_PUSH_URL", "https://x.invalid")
+    monkeypatch.setenv("SCIJEPA_PUSH_TOKEN", "t")
+    monkeypatch.setenv("SCIJEPA_AUTOPUSH", "0")
+    assert pd.start_autopush(str(tmp_path)) is None
+
+
+def test_autopush_round_and_leader_lock(tmp_path, monkeypatch):
+    root = _dash(tmp_path)
+    monkeypatch.setattr(pd.threading, "Thread", lambda **k: SimpleNamespace(start=lambda: None))
+    a, b = pd._AutoPush(str(root), "https://x.invalid", "t", 30), pd._AutoPush(str(root), "https://x.invalid", "t", 30)
+    for ap in (a, b):
+        ap.pusher = FakePusher()
+        ap.pusher.manifest = lambda: {"__synced": "now"}
+    a.round()
+    assert {p for p, _, _ in a.pusher.calls[0][0]} == {"graphs/codebase.html", "runs.json", "runs/r1/live.json"}
+    b.round()                                                   # a holds .autopush.lock: b stays quiet
+    assert not b.pusher.calls

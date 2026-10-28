@@ -2,13 +2,13 @@
 //   GET   -> the manifest, so a restarted script skips files that are already up to date
 //   POST  {files: [{p, v, b64}], deleted: [p]}  -> store the files (base64 gzip) and their versions
 import { isPusher } from "../lib/auth.js";
-import { MANIFEST, fileKey, redis, validPath } from "../lib/store.js";
+import { MANIFEST, fileKey, readManifest, redis, validPath } from "../lib/store.js";
 
 type Pushed = { p: string; v: string; b64: string };
 
 export async function GET(req: Request) {
   if (!(await isPusher(req))) return new Response("bad token", { status: 401 });
-  return Response.json((await redis.hgetall(MANIFEST)) || {});
+  return Response.json(await readManifest());
 }
 
 export async function POST(req: Request) {
