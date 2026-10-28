@@ -24,7 +24,7 @@ SCI-JEPA/
 ├── notebooks/               paper_a_local.ipynb: the pipeline with a live dashboard
 ├── scripts/                 run_local.sh, check_environment.py, data/ (download, normalize; split: sci-jepa split)
 ├── cluster/grete/           Slurm: run_paper_a.sh (setup / submit / dist / tunnel), site.env, normalize.sbatch
-├── docs/                    paper_a.md (method), evaluation.md, data.md, cluster_grete.md
+├── docs/                    CODE_DOCUMENTATION.md (how the code works), paper_a.md (method), evaluation.md, data.md, cluster_grete.md
 ├── tests/                   fast package tests, normalizer tests, the slow smoke test
 ├── pyproject.toml           package metadata, dependencies, the `sci-jepa` command
 └── requirements.txt         exact versions of the reported runs
