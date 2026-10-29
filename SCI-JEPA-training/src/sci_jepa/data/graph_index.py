@@ -134,8 +134,10 @@ class GraphIndex:
 
 
 # ----------------------------------------------------------------------
-def build_proxy_edges(x, comp_paper, tau, topk, device):
-    """Cross-paper near-duplicate pairs (i < j) among KUs of one type."""
+def build_proxy_edges(x, comp_paper, tau, topk, device, block=1024):
+    """Cross-paper near-duplicate pairs (i < j) among KUs of one type. Rows are scored in blocks: a block
+    holds block x n fp32 scores plus a bool mask, ~10 GB at 2M KUs (4096 rows needed ~49 GB with z, more
+    than a 48 GB L40S). Each row's top-k does not depend on the block size."""
     n = x.shape[0]
     if n < 2:
         return np.zeros((0, 2), dtype=np.int64)
@@ -143,9 +145,9 @@ def build_proxy_edges(x, comp_paper, tau, topk, device):
     owner = torch.as_tensor(comp_paper, device=device)
     k = min(topk + 1, n)
     pairs = []
-    for s in range(0, n, 4096):
-        sim = z[s:s + 4096] @ z.T
-        rows = torch.arange(s, min(s + 4096, n), device=device)
+    for s in range(0, n, block):
+        sim = z[s:s + block] @ z.T
+        rows = torch.arange(s, min(s + block, n), device=device)
         sim[owner[rows].unsqueeze(1) == owner.unsqueeze(0)] = -1.0   # cross-paper only (also kills self)
         val, idx = sim.topk(k, dim=1)
         keep = val >= tau
@@ -174,7 +176,7 @@ def get_index(cfg):
     with open(text_path, "wb") as f:                  # full KU texts: only the text baselines read them
         pickle.dump({"comp_text": blob.pop("comp_text"), "mp_text": blob.pop("mp_text", [])}, f,
                     protocol=pickle.HIGHEST_PROTOCOL)
-    torch.save(blob, path)
+    torch.save(blob, path, pickle_protocol=4)         # torch's default protocol 2 fails on objects > 4 GiB (full arXiv)
     print(f"[paper_a.index] saved {path}")
     from sci_jepa.data.ku_graph import embed_cache_dir
     import shutil

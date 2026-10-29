@@ -38,8 +38,17 @@ def write_progress(results_dir, run, **fields):
     """A training process's latest progress (tiny JSON, atomic). run: the run's name (dashboard name)."""
     safe = re.sub(r"[^A-Za-z0-9_.@=+-]", "_", run)
     _atomic({"run": run, "pid": os.getpid(), "time": time.time(), "job": os.environ.get("SLURM_JOB_ID"),
-             "shard": os.environ.get("SCI_JEPA_SHARD"), **fields},
+             "shard": os.environ.get("SCI_JEPA_SHARD"), "gpu": os.environ.get("CUDA_VISIBLE_DEVICES"), **fields},
             os.path.join(progress_dir(results_dir), f"{safe}.json"))
+
+
+def _alive(pid):
+    """The process still runs on this node (the monitor shares the node with the job's training processes)."""
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except (TypeError, ValueError, ProcessLookupError, PermissionError):
+        return False
 
 
 def _slurm_end():
@@ -160,8 +169,10 @@ class Monitor(threading.Thread):
                 r = json.load(open(f))
             except (OSError, json.JSONDecodeError):
                 continue
-            if r.get("job") == os.environ.get("SLURM_JOB_ID") and time.time() - r.get("time", 0) < 600:
-                rows.append(r)                         # this job's runs, reported in the last 10 minutes
+            if r.get("job") == os.environ.get("SLURM_JOB_ID") and r.get("status") != "done" and (
+                    time.time() - r.get("time", 0) < 600 or _alive(r.get("pid"))):
+                rows.append(r)       # this job's runs: reported in the last 10 minutes, or still running (a final
+                                     #   evaluation reports nothing for up to an hour)
         return sorted(rows, key=lambda r: str(r.get("shard")))
 
     def _runs(self):
