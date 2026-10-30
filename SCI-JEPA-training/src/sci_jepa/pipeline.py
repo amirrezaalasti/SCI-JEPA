@@ -251,6 +251,11 @@ if A.stage in ("all", "serve"):
     # shards' LiveRuns share the folder's .autopush.lock, so one process uploads
     from sci_jepa.dashboard.push import start_autopush
     start_autopush(DASH)
+elif A.stage == "shard" and A.monitor_interval > 0:
+    # every job reports on the Infrastructure page, also the jobs without a server that share another job's results
+    # folder (one per node / GPU type): the first shard of each job that gets its lock monitors it
+    from sci_jepa.infra.monitor import start as start_monitor
+    MONITOR = start_monitor(str(OUT), A.monitor_interval)
 if A.stage == "serve":                                     # runs until the job script stops it
     while True:
         heal_runs_index(DASH)

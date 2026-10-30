@@ -1,6 +1,7 @@
 """Live infrastructure monitor: one sample per second of the job's GPUs, CPU, memory and training progress.
 
-One Monitor runs per job (in the dashboard server process: pipeline --stage serve, or the single-process run).
+One Monitor runs per job: in the dashboard server process (pipeline --stage serve, or the single-process run), and
+in a job without a server, in one of its training processes (--stage shard). A lock per job keeps it to one.
 It writes
     <results>/dashboard/infra/jobs/<cluster>-<job>.json   latest sample + the last `keep` samples (infra.html)
     <results>/dashboard/infra/jobs.json   index of those files (the local page reads it; the hosted page lists
@@ -267,8 +268,34 @@ class Monitor(threading.Thread):
         self._stop.set()
 
 
+_LOCKS = []
+
+
+def _claim(results_dir):
+    """True when this process may monitor its job: it holds <results>/infra/<job>/.monitor.lock until it exits."""
+    try:
+        import fcntl
+    except ImportError:                                     # Windows: no shards
+        return True
+    job = os.environ.get("SLURM_JOB_ID") or f"local-{os.uname().nodename}-{os.getpid()}"
+    d = os.path.join(results_dir, "infra", job)
+    os.makedirs(d, exist_ok=True)
+    f = open(os.path.join(d, ".monitor.lock"), "a")
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        f.close()
+        return False
+    _LOCKS.append(f)
+    return True
+
+
 def start(results_dir, interval=1.0):
-    """Start the monitor thread for this job; returns it (call .stop() at the end, or let the process exit)."""
+    """Start the monitor thread for this job; returns it (call .stop() at the end, or let the process exit).
+    None when another process of the job already monitors it (the server, or another shard)."""
+    if not _claim(results_dir):
+        print("[infra] another process monitors this job", flush=True)
+        return None
     m = Monitor(results_dir, interval)
     m.start()
     print(f"[infra] monitoring every {interval:g} s -> {m.dir} (live: {m.live})", flush=True)
