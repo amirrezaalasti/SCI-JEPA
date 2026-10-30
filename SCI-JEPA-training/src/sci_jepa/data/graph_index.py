@@ -158,6 +158,38 @@ def build_proxy_edges(x, comp_paper, tau, topk, device, block=1024):
     return out.numpy().astype(np.int64)
 
 
+# The KU and counterfactual vectors (44.6M x 768 fp16 = 69 GB on the full arXiv split) live next to the index as
+# .npy files, opened memory-mapped and read-only: every training process on a node then shares one cached copy instead
+# of loading its own (four copies OOM-killed jobs 38878 / 38883), and a process reads only the rows it touches.
+MMAP_KEYS = ("comp_x", "mp_x")
+
+
+def _sidecar(path, key):
+    return f"{path[:-3]}.{key}.npy"
+
+
+def save_index(blob, path):
+    """Write the index: MMAP_KEYS as .npy files, the rest as the .pt (each written to a temporary name, then renamed:
+    a process loading at the same time sees the old or the new index, never half of one)."""
+    rest = dict(blob)
+    for k in MMAP_KEYS:
+        if isinstance(rest.get(k), np.ndarray):
+            tmp = _sidecar(path, k)[:-4] + f".{os.getpid()}.tmp.npy"
+            np.save(tmp, rest.pop(k))
+            os.replace(tmp, _sidecar(path, k))
+    tmp = f"{path}.{os.getpid()}.tmp"
+    torch.save(rest, tmp, pickle_protocol=4)          # torch's default protocol 2 fails on objects > 4 GiB (full arXiv)
+    os.replace(tmp, path)
+
+
+def load_index(path):
+    blob = torch.load(path, weights_only=False)
+    for k in MMAP_KEYS:
+        if k not in blob and os.path.exists(_sidecar(path, k)):
+            blob[k] = np.load(_sidecar(path, k), mmap_mode="r")
+    return blob
+
+
 def get_index(cfg):
     from sci_jepa.data.ku_graph import build_blob, data_fingerprint
     if cfg.synthetic:
@@ -167,7 +199,7 @@ def get_index(cfg):
     text_path = path[:-3] + ".texts.pkl"
     if os.path.exists(path):
         print(f"[paper_a.index] loaded {path}")
-        gi = GraphIndex(torch.load(path, weights_only=False))
+        gi = GraphIndex(load_index(path))
         gi._text_path = text_path
         return gi
     blob = build_blob(cfg)
@@ -176,7 +208,7 @@ def get_index(cfg):
     with open(text_path, "wb") as f:                  # full KU texts: only the text baselines read them
         pickle.dump({"comp_text": blob.pop("comp_text"), "mp_text": blob.pop("mp_text", [])}, f,
                     protocol=pickle.HIGHEST_PROTOCOL)
-    torch.save(blob, path, pickle_protocol=4)         # torch's default protocol 2 fails on objects > 4 GiB (full arXiv)
+    save_index(blob, path)
     print(f"[paper_a.index] saved {path}")
     from sci_jepa.data.ku_graph import embed_cache_dir
     import shutil
@@ -184,3 +216,20 @@ def get_index(cfg):
     gi = GraphIndex(blob)
     gi._text_path = text_path
     return gi
+
+
+
+if __name__ == "__main__":
+    # convert an index saved as one .pt into .pt + memory-mapped .npy vectors (once; loading works either way):
+    #   python -m sci_jepa.data.graph_index --mmap <runs/.../paper_a_ku_index_<fingerprint>.pt>
+    import argparse
+    ap = argparse.ArgumentParser("graph_index")
+    ap.add_argument("--mmap", required=True)
+    a = ap.parse_args()
+    b = torch.load(a.mmap, weights_only=False)
+    todo = [k for k in MMAP_KEYS if isinstance(b.get(k), np.ndarray)]
+    print(f"{a.mmap}: memory-mapping {todo or 'nothing (already converted)'}", flush=True)
+    if todo:
+        save_index(b, a.mmap)
+        print("done:", {k: f"{os.path.getsize(_sidecar(a.mmap, k)) / 2**30:.1f} GiB" for k in todo},
+              f"pt {os.path.getsize(a.mmap) / 2**30:.1f} GiB")

@@ -54,6 +54,12 @@ N_PROBE_CLASSES = len(ROLE_RELS) + 1          # role relations + "no edge"
 PROBE_NONE = len(ROLE_RELS)
 
 
+# Neighbour scores cached per process (Sampler._scores), bounded so that
+# 16 batch workers x 4 training processes stay within RAM on the full arXiv split. The values are deterministic,
+# so clearing the cache changes only speed, never a batch.
+SCORE_CACHE_MAX = 20_000                 # ~30 KB per paper at 2M papers: ~0.6 GB per process
+
+
 class Sampler:
     """Draws anchors and neighbourhoods for one split."""
 
@@ -127,6 +133,8 @@ class Sampler:
             frontier = nxt
         out = (np.fromiter(score.keys(), dtype=np.int32, count=len(score)),
                np.fromiter(score.values(), dtype=np.float64, count=len(score)))
+        if len(self._score_cache) >= SCORE_CACHE_MAX:  # bounded: at 2M papers every batch worker's cache grew by
+            self._score_cache.clear()                  #   ~15 GB within an hour and OOM-killed job 38878
         self._score_cache[p0] = out
         return out
 
