@@ -366,7 +366,8 @@ def _fp32(out):
 # ---- resume a training run across jobs (cfg.resume_runs; run_experiment passes ckpt_path) --------------------
 CKPT_VERSION = 1
 _CKPT_IGNORE = ("out_dir", "model_dir", "index_dir", "device", "resume_runs", "ckpt_every", "llm_models",
-                "batch_workers", "tf32", "fused_adamw", "trainer", "devices")   # speed settings: a run may resume with other values
+                "batch_workers", "tf32", "fused_adamw", "trainer", "devices",   # speed settings: a run may resume with other values
+                "arms")                                         # which arms a job may claim, not how this arm trains
 
 
 def _ckpt_key(cfg, seed):

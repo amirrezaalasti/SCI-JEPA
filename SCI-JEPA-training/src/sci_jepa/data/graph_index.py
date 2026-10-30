@@ -183,10 +183,17 @@ def save_index(blob, path):
 
 
 def load_index(path):
+    """SCIJEPA_MMAP_DIR: a folder holding copies of the .npy vector files (e.g. on a node's RAM disk) to open instead of
+    the ones next to the index, for nodes that read the shared disk slowly."""
     blob = torch.load(path, weights_only=False)
     for k in MMAP_KEYS:
-        if k not in blob and os.path.exists(_sidecar(path, k)):
-            blob[k] = np.load(_sidecar(path, k), mmap_mode="r")
+        f = _sidecar(path, k)
+        local = os.path.join(os.environ.get("SCIJEPA_MMAP_DIR", ""), os.path.basename(f))
+        if os.environ.get("SCIJEPA_MMAP_DIR") and os.path.exists(local) and os.path.getsize(local) == os.path.getsize(f):
+            f = local
+        if k not in blob and os.path.exists(f):
+            blob[k] = np.load(f, mmap_mode="r")
+            print(f"[paper_a.index] {k}: memory-mapped {f}", flush=True)
     return blob
 
 
