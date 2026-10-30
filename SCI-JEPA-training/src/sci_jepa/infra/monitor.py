@@ -2,7 +2,9 @@
 
 One Monitor runs per job (in the dashboard server process: pipeline --stage serve, or the single-process run).
 It writes
-    <results>/dashboard/infra/live.json   latest sample + the last `keep` samples (the dashboard's infra.html)
+    <results>/dashboard/infra/jobs/<cluster>-<job>.json   latest sample + the last `keep` samples (infra.html)
+    <results>/dashboard/infra/jobs.json   index of those files (the local page reads it; the hosted page lists
+                                          infra/jobs/ from its manifest, since every cluster pushes its own index)
     <results>/infra/<job>/timeseries.csv  every sample, for the report's timelines
     <results>/infra/<job>/system.json     sysinfo record of the job
 Training processes report their progress through write_progress() (called by train_one about every 5 s).
@@ -65,9 +67,12 @@ class Monitor(threading.Thread):
         super().__init__(daemon=True)
         self.results, self.interval, self.keep = results_dir, interval, keep
         self.job = os.environ.get("SLURM_JOB_ID") or f"local-{os.uname().nodename}-{os.getpid()}"
+        self.cluster = os.environ.get("SLURM_CLUSTER_NAME") or ("local" if self.job.startswith("local-") else "slurm")
         self.dir = os.path.join(results_dir, "infra", self.job)
-        # the dashboard server serves <results>/dashboard/: the live file goes there (infra.html polls it)
-        self.live = os.path.join(results_dir, "dashboard", "infra", "live.json")
+        # the dashboard server serves <results>/dashboard/: the live file goes there (infra.html polls it). One file
+        # per job, keyed by cluster too: jobs on several nodes or clusters push into one hosted folder
+        self.key = re.sub(r"[^A-Za-z0-9_.=+-]", "_", f"{self.cluster}-{self.job}")
+        self.live = os.path.join(results_dir, "dashboard", "infra", "jobs", f"{self.key}.json")
         os.makedirs(self.dir, exist_ok=True)
         self.system = sysinfo.collect(results_dir)
         sysinfo.write(self.system, os.path.join(self.dir, "system.json"))
@@ -219,14 +224,30 @@ class Monitor(threading.Thread):
 
     def brief(self):
         s = self.system
-        return {"job": self.job, "host": s["host"], "partition": s["slurm"].get("SLURM_JOB_PARTITION"),
+        return {"job": self.job, "cluster": self.cluster, "key": self.key, "host": s["host"], "partition": s["slurm"].get("SLURM_JOB_PARTITION"),
                 "time_limit": s["slurm"].get("TimeLimit"), "gpus": s["gpus"].get("nvidia_smi_L"),
                 "driver": s["gpus"].get("driver"), "cuda": s["torch"].get("cuda_build"),
                 "torch": s["torch"].get("torch"), "cpu": s["cpu"], "started": time.strftime(
                     "%Y-%m-%d %H:%M:%S", time.localtime(self.t_start))}
 
+    def _register(self):
+        """Add this job to dashboard/infra/jobs.json; entries whose file is gone or a week old are dropped."""
+        d = os.path.dirname(os.path.dirname(self.live))
+        p = os.path.join(d, "jobs.json")
+        try:
+            jobs = json.load(open(p))
+        except (OSError, json.JSONDecodeError):
+            jobs = []
+        def fresh(k):
+            try:
+                return time.time() - os.path.getmtime(os.path.join(d, "jobs", f"{k}.json")) < 7 * 86400
+            except OSError:
+                return False
+        _atomic([k for k in jobs if k != self.key and fresh(k)] + [self.key], p)
+
     def run(self):
         brief = self.brief()
+        registered = False
         while not self._stop.is_set():
             t = time.time()
             try:
@@ -235,6 +256,9 @@ class Monitor(threading.Thread):
                 self._csv(s)
                 _atomic({"system": brief, "now": s, "history": list(self.hist), "interval_s": self.interval},
                         self.live)
+                if not registered:                      # after the first write, so the index never names a missing file
+                    self._register()
+                    registered = True
             except Exception as e:                      # noqa: BLE001  (monitoring never stops a run)
                 print(f"[infra] sample failed: {e}", flush=True)
             self._stop.wait(max(0.05, self.interval - (time.time() - t)))
