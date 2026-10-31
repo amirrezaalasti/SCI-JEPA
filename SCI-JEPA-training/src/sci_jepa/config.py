@@ -145,6 +145,9 @@ class PaperAConfig:
                                        #   history, best epoch) and a later job continues it from there
     ckpt_every: int = 2000             # with resume_runs: also checkpoint every this many steps (0 = only at
                                        #   epoch ends); a job killed at its time limit loses at most this much
+    keep_ckpts: int = 0                # >0 (with a model folder): also KEEP the weights at this many evenly spaced
+                                       #   steps, <model_dir>/<exp>/<arm>_seed<s>/checkpoints/step<N>.safetensors
+                                       #   (the training dynamics of every run; env KEEP_CKPTS, pipeline default 10)
     encoder: str = "transformer"       # context / target encoder and predictor family (model.ENCODERS):
                                        #   transformer (relation-biased attention over every token pair) |
                                        #   rgat (attention only along graph edges; "gnn" = alias) | gine (GINE

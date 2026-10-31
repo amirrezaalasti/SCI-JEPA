@@ -61,6 +61,37 @@ def test_checkpoint_of_other_settings_is_ignored(tmp_path):
     assert len(other["history"]) == STEPS                                # trained from the start, not resumed
 
 
+def test_keep_steps_are_evenly_spaced_and_end_at_the_last_step():
+    assert T.keep_steps(331720, 10) == [33171, 66343, 99515, 132687, 165859, 199031, 232203, 265375, 298547, 331719]
+    assert T.keep_steps(5, 10) == [0, 1, 2, 3, 4]                       # fewer steps than kept checkpoints
+    assert T.keep_steps(100, 0) == []
+    assert "keep_ckpts" not in T._ckpt_key(PaperAConfig().override(keep_ckpts=10), 0)   # old checkpoints still resume
+
+
+def test_checkpoint_keyed_with_a_now_ignored_setting_still_resumes(tmp_path):
+    """Checkpoints written before "arms" joined _CKPT_IGNORE carry it in their key; they must still resume."""
+    import torch
+    key = T._ckpt_key(PaperAConfig(), 0)
+    path = str(tmp_path / "old.pt")
+    torch.save({"version": T.CKPT_VERSION, "key": {**key, "arms": "('reference',)", "keep_ckpts": "0"}}, path)
+    assert T._load_ckpt(path, key, lambda *_: None) is not None
+    torch.save({"version": T.CKPT_VERSION, "key": {**key, "lr": "1.0"}}, path)          # a real difference
+    assert T._load_ckpt(path, key, lambda *_: None) is None
+
+
+@pytest.mark.slow
+def test_kept_weights_load_into_the_model(tmp_path):
+    from safetensors import safe_open
+    cfg = PaperAConfig().override(**SIZES["tiny"], **FAST, out_dir=str(tmp_path), keep_ckpts=4)
+    gi = get_index(cfg)
+    T.train_one(cfg, gi, 0, log=lambda *_: None, save_dir=str(tmp_path / "model"))
+    kept = sorted(os.listdir(tmp_path / "model" / "checkpoints"))
+    assert kept == ["step0000003.safetensors", "step0000006.safetensors", "step0000009.safetensors",
+                    "step0000012.safetensors"]
+    with safe_open(str(tmp_path / "model" / "checkpoints" / kept[-1]), "pt") as f:
+        assert f.metadata()["step"] == "12" and set(f.keys()) == set(T.PaperAModel(cfg).state_dict())
+
+
 def test_llm_arms_expand_one_per_model():
     cfg = PaperAConfig().override(llm_models=("Qwen/Qwen2.5-7B-Instruct", "mistralai/Mistral-7B-Instruct-v0.3"))
     arms = T.expand_llm_arms([("bm25", {"baseline": "bm25"}), ("LLM-Reasoning", {"baseline": "llm"})], cfg)

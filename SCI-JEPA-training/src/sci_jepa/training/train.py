@@ -365,7 +365,7 @@ def _fp32(out):
 
 # ---- resume a training run across jobs (cfg.resume_runs; run_experiment passes ckpt_path) --------------------
 CKPT_VERSION = 1
-_CKPT_IGNORE = ("out_dir", "model_dir", "index_dir", "device", "resume_runs", "ckpt_every", "llm_models",
+_CKPT_IGNORE = ("out_dir", "model_dir", "index_dir", "device", "resume_runs", "ckpt_every", "keep_ckpts", "llm_models",
                 "batch_workers", "tf32", "fused_adamw", "trainer", "devices",   # speed settings: a run may resume with other values
                 "arms")                                         # which arms a job may claim, not how this arm trains
 
@@ -397,6 +397,27 @@ def _save_ckpt(path, payload):
     os.replace(tmp, path)
 
 
+def keep_steps(n_steps, k):
+    """The steps whose weights a run keeps (cfg.keep_ckpts): the last step of each k-th of training."""
+    return sorted({max(int(math.ceil(i * n_steps / k)) - 1, 0) for i in range(1, k + 1)}) if k > 0 else []
+
+
+def _keep_weights(model, cfg, save_dir, step, n_steps, epoch, sec, loss):
+    """One kept checkpoint (cfg.keep_ckpts): the weights only (all modules, incl. the EMA target encoder), loadable
+    like model.safetensors; written atomically, never deleted."""
+    from safetensors.torch import save_file
+    d = os.path.join(save_dir, "checkpoints")
+    os.makedirs(d, exist_ok=True)
+    if not os.path.exists(os.path.join(save_dir, "config.json")):   # so a checkpoint loads before the run ends
+        json.dump(cfg.as_dict(), open(os.path.join(save_dir, "config.json"), "w"), indent=2, default=str)
+    path = os.path.join(d, f"step{step + 1:07d}.safetensors")
+    meta = {"step": str(step + 1), "n_steps": str(n_steps), "epoch": str(epoch), "train_sec": f"{sec:.0f}",
+            "train_jepa": "" if loss is None else f"{loss:.6g}", "saved": time.strftime("%Y-%m-%d %H:%M:%S")}
+    save_file({k: v.detach().cpu().contiguous() for k, v in model.state_dict().items()}, path + ".tmp", metadata=meta)
+    os.replace(path + ".tmp", path)
+    return path
+
+
 def _load_ckpt(path, key, log):
     if not path or not os.path.exists(path):
         return None
@@ -405,7 +426,10 @@ def _load_ckpt(path, key, log):
     except Exception as e:                              # noqa: BLE001  (a damaged file: start over)
         log(f"  [resume] cannot read {path} ({e}): starting this run from the beginning")
         return None
-    if ck.get("version") != CKPT_VERSION or ck.get("key") != key:
+    # settings ignored now are dropped from the stored key too: a checkpoint written before a setting joined
+    # _CKPT_IGNORE (e.g. "arms") still resumes
+    stored = {k: v for k, v in (ck.get("key") or {}).items() if k not in _CKPT_IGNORE}
+    if ck.get("version") != CKPT_VERSION or stored != key:
         log(f"  [resume] {path} belongs to other settings: starting this run from the beginning")
         return None
     return ck
@@ -418,7 +442,9 @@ def train_one(cfg, gi, seed, log=print, live=None, save_dir=None, ckpt_path=None
     ckpt_path: resume file. If it exists and belongs to this run (same settings and seed), training continues
     from it; while training, a checkpoint is written every cfg.ckpt_every steps and at every epoch end, and
     once more when training ends (so a job stopped during the final evaluation does not retrain). The caller
-    deletes it when the result is saved. None = no checkpoints (the original behaviour)."""
+    deletes it when the result is saved. None = no checkpoints (the original behaviour).
+    cfg.keep_ckpts (with save_dir): the weights at that many evenly spaced steps are kept in save_dir/checkpoints/
+    (keep_steps); a resumed run writes the ones still ahead of it."""
     set_seed(seed)
     dev = torch.device(resolve_device(cfg.device))
     if cfg.minimal_pairs and cfg.mp_filter:            # adversarially filtered counterfactuals (validity.py)
@@ -540,6 +566,11 @@ def train_one(cfg, gi, seed, log=print, live=None, save_dir=None, ckpt_path=None
     report("starting", step)
     ck_every = cfg.ckpt_every if ckpt_path else 0
     snap = (lambda st: (ck_every and (st + 1) % ck_every == 0) or st in epoch_ends) if ckpt_path else None
+    keep_at = set(keep_steps(n_steps, cfg.keep_ckpts)) if save_dir else set()   # kept weights (cfg.keep_ckpts)
+    if keep_at:
+        log(f"  [keep] weights at {len(keep_at)} steps ({', '.join(str(s + 1) for s in sorted(keep_at))}) -> "
+            f"{os.path.join(save_dir, 'checkpoints')}" + (f"; {sum(s <= step for s in keep_at)} already passed"
+                                                          if step >= 0 else ""))
 
     def checkpoint(at, sampler_state, done):
         _save_ckpt(ckpt_path, {
@@ -561,6 +592,8 @@ def train_one(cfg, gi, seed, log=print, live=None, save_dir=None, ckpt_path=None
             log(f"  [lightning] not used ({why}): native training loop")
             use_lightning = False
     if use_lightning:
+        if keep_at:
+            log("  [keep] the Lightning loop keeps no intermediate weights (KEEP_CKPTS needs the native loop)")
         res = LL.fit_lightning(model=model, cfg=cfg, gi=gi, dev=dev, seed=seed, log=log, live=live, opt=opt,
                                sched=sched, scaler=scaler, params=params, sampler=sampler, plan_fn=plan_fn,
                                n_steps=n_steps, prefetch=prefetch, workers=workers, epoch_ends=epoch_ends,
@@ -684,6 +717,9 @@ def train_one(cfg, gi, seed, log=print, live=None, save_dir=None, ckpt_path=None
                 prog["val"] = {"bal_MRR": rb["MRR"], "chance": rb.get("chance_MRR"), "epoch": epoch_of(step), "kind": "live"}
             if cfg.neuron_report and step not in epoch_ends:
                 live.neurons(step, epoch_of(step), neuron_report(model, gi, cfg, dev, "val", cfg.neuron_instances))
+        if step in keep_at:
+            p = _keep_weights(model, cfg, save_dir, step, n_steps, epoch_of(step), time.time() - t0, prog.get("loss"))
+            log(f"  [keep] step {step + 1}: weights kept in {p}")
         if sampler_state is not None:                   # every ckpt_every steps and at every epoch end
             checkpoint(step, sampler_state, done=False)
 

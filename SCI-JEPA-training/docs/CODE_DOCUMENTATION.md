@@ -173,7 +173,7 @@ All settings live in one dataclass, `PaperAConfig` (`config.py`). Every experime
 | Speed | `amp` (`off` · `fp16` · `bf16`), `attn_impl` (`manual` · `sdpa`), `prefetch`, `batch_workers`, `tf32`, `fused_adamw` |
 | Evaluation | `eval_instances` (4000), `balanced_k` (100 candidates), `pool_mode` (`topic`), `minimal_pairs`, `mp_filter`, `sim_threshold` (0.80), `task_eval_instances` (300), `primary_average` (`macro`) |
 | Comparison systems | `baseline` (`text` · `bm25` · `scincl` · `bge-m3` · `supervised` · `llm`), `llm_model`, `llm_models`, `llm_eval_instances` |
-| Resume | `resume_runs`, `ckpt_every` (2000 steps) |
+| Resume | `resume_runs`, `ckpt_every` (2000 steps), `keep_ckpts` (kept weights, see below) |
 | Paths | `index_dir`, `out_dir`, `model_dir` (from environment variables, below) |
 
 ### 5.2 Presets
@@ -197,6 +197,7 @@ All settings live in one dataclass, `PaperAConfig` (`config.py`). Every experime
 | `SPEED`, `BATCH_WORKERS` | speed preset, batch-building processes per training process |
 | `LLM_MODELS`, `LLM_QUERIES` | LLM-Reasoning models (comma-separated Hugging Face ids), queries per task |
 | `RESUME`, `CKPT_EVERY` | resume from checkpoints, checkpoint interval in steps |
+| `KEEP_CKPTS` | weights kept at this many evenly spaced steps of every training run, in its model folder under `checkpoints/` (default 10; 0 = none) |
 | `STAGE`, `SHARD` | pipeline stage (`all`, `build`, `shard`, `merge`, `serve`), shard `i/n` |
 | `MONITOR_INTERVAL` | seconds between infrastructure samples (0 = off) |
 | `SKIP_SINGLE`, `SKIP_VALIDITY`, `SKIP_INFERENCE` | skip optional pipeline sections |

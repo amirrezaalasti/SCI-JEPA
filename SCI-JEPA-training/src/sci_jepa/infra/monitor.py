@@ -79,7 +79,7 @@ class Monitor(threading.Thread):
         sysinfo.write(self.system, os.path.join(self.dir, "system.json"))
         self.t_start, self.t_end = time.time(), _slurm_end()
         self.hist = collections.deque(maxlen=keep)
-        self._stop = threading.Event()
+        self._halt = threading.Event()
         self._nvml()
         self._procs, self._procs_t = [], 0.0
         self._runs_done, self._runs_t = None, 0.0
@@ -249,7 +249,7 @@ class Monitor(threading.Thread):
     def run(self):
         brief = self.brief()
         registered = False
-        while not self._stop.is_set():
+        while not self._halt.is_set():
             t = time.time()
             try:
                 s = self.sample()
@@ -262,10 +262,10 @@ class Monitor(threading.Thread):
                     registered = True
             except Exception as e:                      # noqa: BLE001  (monitoring never stops a run)
                 print(f"[infra] sample failed: {e}", flush=True)
-            self._stop.wait(max(0.05, self.interval - (time.time() - t)))
+            self._halt.wait(max(0.05, self.interval - (time.time() - t)))
 
     def stop(self):
-        self._stop.set()
+        self._halt.set()
 
 
 _LOCKS = []

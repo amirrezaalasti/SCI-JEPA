@@ -101,6 +101,9 @@ def parse_args():
                    help="RESUME: 1 = every training run checkpoints and a later job continues it (chained jobs)")
     p.add_argument("--ckpt-every", type=int, default=_env("CKPT_EVERY", 2000),
                    help="CKPT_EVERY: with --resume, also checkpoint every this many steps (0 = epoch ends only)")
+    p.add_argument("--keep-ckpts", type=int, default=_env("KEEP_CKPTS", 10),
+                   help="KEEP_CKPTS: keep the weights at this many evenly spaced steps of every training run, in its "
+                        "model folder under checkpoints/ (0 = none)")
     p.add_argument("--monitor-interval", type=float, default=_env("MONITOR_INTERVAL", 1.0),
                    help="MONITOR_INTERVAL: seconds between infrastructure samples (0 = no monitor)")
     p.add_argument("--stage", default=_env("STAGE", "all"), choices=["all", "build", "shard", "merge", "serve"],
@@ -275,7 +278,7 @@ cfg = PaperAConfig().override(**SIZES[A.size], max_papers=A.n_papers, split_dir=
                               rows_per_shard=100 if A.n_papers <= 20000 else 500,
                               llm_model=A.llm_model, llm_allow_cpu=bool(A.llm_on_mac), llm_eval_instances=A.llm_queries,
                               llm_models=tuple(A.llm_models), arms=tuple(A.arms),
-                              resume_runs=bool(A.resume), ckpt_every=A.ckpt_every,
+                              resume_runs=bool(A.resume), ckpt_every=A.ckpt_every, keep_ckpts=A.keep_ckpts,
                               field_balance=A.field_balance, field_alpha=A.field_alpha,
                               batch_workers=A.batch_workers,
                               **{"off": {}, "fast": FAST, "gpu": FAST_GPU, "fast+multi": FAST_MULTI}[A.speed])
