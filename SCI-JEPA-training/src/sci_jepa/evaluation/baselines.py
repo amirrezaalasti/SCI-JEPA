@@ -792,6 +792,10 @@ def text_baseline(cfg, gi, split="test", seed=1234):
     """Evaluate the comparison system cfg.baseline ("text", "bm25", "scincl", "bge", "minilm",
     "supervised"). The name is kept for backward compatibility."""
     t0 = time.time()
+    import torch
+    from sci_jepa.config import resolve_device
+    from sci_jepa.infra.cost import RunMeter
+    meter = RunMeter(torch.device(resolve_device(cfg.device)))   # peak memory, GPU energy (dashboard: Cost & efficiency)
     if cfg.minimal_pairs and cfg.mp_filter:            # the same filtered counterfactuals as the models
         from sci_jepa.evaluation.validity import apply_filter
         apply_filter(gi, cfg)
@@ -866,6 +870,7 @@ def text_baseline(cfg, gi, split="test", seed=1234):
            "audit": {"flagged_frac": NAN}, "shortcut_margin_MRR": {"mean": NAN},
            "history": [], "epoch_results": [], "n_eval": len(rec),
            "train_sec": round(time.time() - t0, 1), "params_trainable": 0, "samples_seen": 0}
+    out["cost"] = meter.result()
     if isinstance(sys, SupervisedSystem):
         out["params_trainable"] = int(sum(p.numel() for p in sys.net.parameters()))
         out["supervised"] = {"passes": sys.passes, "val_in_batch_acc": sys.val_acc}

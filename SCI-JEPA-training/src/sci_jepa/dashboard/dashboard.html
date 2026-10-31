@@ -176,6 +176,19 @@ dl{display:grid;grid-template-columns:220px 1fr;gap:6px 14px;margin:0}dt{font-we
    <div id="reg-summary"></div>
    <div class="scroll"><table id="reg-table"></table></div></div>
  </section>
+ <section class="tab" id="t-cost">
+  <div class="card"><h3>Cost &amp; efficiency: time, memory, energy, compute and money of every run</h3>
+   <div class="row" style="flex-wrap:wrap;gap:10px"><select id="cost-exp" title="which experiment"></select>
+    <label>€ per A100-hour <input id="cost-eur" type="number" min="0" step="0.1" value="2" style="width:64px"></label>
+    <label>grid kg CO₂e/kWh <input id="cost-grid" type="number" min="0" step="0.01" value="0.38" style="width:72px"></label>
+    <label>PUE <input id="cost-pue" type="number" min="1" step="0.05" value="1.2" style="width:56px"></label>
+    <span class="muted" id="cost-meta"></span></div>
+   <p class="hint">Reported as in the literature on ML compute (Strubell et al. 2019, Henderson et al. 2020, Patterson et al. 2021, ML CO2 impact / CodeCarbon). <b>Time</b>: each run's own timer (training and evaluation of a model, or the whole evaluation of a comparison system). <b>GPU-hours</b> are hours on one GPU or GPU slice; a MIG slice xg.yygb counts as x/7 of an A100 (<b>A100-equivalent hours</b>). <b>Memory</b>: peak GPU memory allocated by PyTorch and peak resident memory of the process (an upper bound when one process trains several runs). <b>Energy</b>: measured from the GPU's energy counter (NVML) where the run recorded it; on a MIG slice the counter belongs to the whole GPU, so it is scaled by the slice share; otherwise estimated as A100-equivalent hours × 400 W. Both are multiplied by the PUE; CO₂e = energy × grid intensity; cost = A100-equivalent hours × the price above. <b>FLOPs</b> ≈ 6 × trainable parameters × instances seen × 189 tokens (JEPA models; the same estimate as the compliance report); <b>MFU</b> = FLOPs ÷ (time × peak bf16 FLOP/s of the slice), with evaluation inside the time, so a lower bound. <b>Quality</b>: average % over the five reasoning tasks on test. Runs that finished before this accounting existed are estimated from their recorded time (<b>source</b>).</p>
+   <div class="kpis" id="cost-kpi"></div></div>
+  <div class="card"><h3>Per method (sum over seeds; time and memory per run)</h3><div class="scroll"><table id="cost-table"></table></div></div>
+  <div class="card"><h3>Data and run length per method</h3><p class="hint">How much data each method saw and how long it ran. <b>Papers</b> and <b>KUs</b>: the KU graph the run trained on (train / val / test papers by the time split). <b>Epochs</b> and <b>steps</b>: mean per run (best epoch = the one kept by model selection). <b>Instances seen</b> = steps × batch size. <b>Wall-clock</b>: total over all runs of the method.</p><div class="scroll"><table id="cost-data"></table></div></div>
+  <div class="card"><h3>Quality for the money</h3><p class="hint">One dot per method: cost of one run (€, log scale) against its average reasoning %. Up and to the left is better; the dashed line joins the methods no other method beats on both. Hover a dot for its numbers.</p><div id="cost-plot"></div></div>
+ </section>
  <section class="tab" id="t-infra"><iframe src="infra.html" title="training infrastructure, live" style="width:100%;height:calc(100vh - 120px);border:0;background:transparent"></iframe></section>
  <section class="tab" id="t-runs">
   <div class="card"><h3>All runs (live)</h3><p class="hint">Every model trained so far, refreshed every few seconds. Click a run name to open it.</p><div class="scroll"><table id="runs-table"></table></div></div>
@@ -193,11 +206,11 @@ dl{display:grid;grid-template-columns:220px 1fr;gap:6px 14px;margin:0}dt{font-we
 </main>
 </div>
 <script>
-const TABS=[["overview","Overview"],["explain","Explain"],["train","Training dynamics"],["val","Validation (live)"],["epochs","Epochs"],["tasks","Reasoning tasks"],["world","World model"],["neurons","Neurons"],["where","Where it learns"],["examples","Examples"],["graphs","Graphs"],["bench","Benchmark"],["compare","Compare"],["runs","All runs"],["safety","Safety"],["reg","Regulation & ethics"],["infra","Infrastructure (live)"]];
+const TABS=[["overview","Overview"],["explain","Explain"],["train","Training dynamics"],["val","Validation (live)"],["epochs","Epochs"],["tasks","Reasoning tasks"],["world","World model"],["neurons","Neurons"],["where","Where it learns"],["examples","Examples"],["graphs","Graphs"],["bench","Benchmark"],["compare","Compare"],["runs","All runs"],["safety","Safety"],["reg","Regulation & ethics"],["infra","Infrastructure (live)"],["cost","Cost & efficiency"]];
 // side panel: groups (run → evaluation → trust → system) and an icon per view
 const NAV=[["This run",["overview","explain","train","val","epochs","tasks","world","neurons","where","examples","graphs"]],
-  ["Evaluation",["bench","compare","runs"]],["Trust & governance",["safety","reg"]],["System",["infra"]]];
-const NAV_IC={overview:'<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',explain:'<path d="M4 5h16M4 10h16M4 15h10M4 20h7"/>',train:'<path d="M3 20l6-7 4 4 8-10"/><path d="M15 7h6v6"/>',val:'<path d="M5 12l5 5L20 7"/>',epochs:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16M15 4v16"/>',tasks:'<path d="M12 3l9 9-9 9-9-9z"/>',world:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',neurons:'<circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="M7.5 7.5l3.5 9M16.5 7.5l-3.5 9M8 6h8"/>',where:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',examples:'<path d="M5 5h14v10H9l-4 4z"/>',graphs:'<circle cx="5" cy="12" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="19" cy="19" r="2"/><path d="M7 11l10-5M7 13l10 5"/>',bench:'<path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/>',compare:'<path d="M7 4L3 8l4 4M3 8h14M17 12l4 4-4 4M21 16H7"/>',runs:'<path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>',safety:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',reg:'<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h7"/>',infra:'<rect x="3" y="4" width="18" height="6" rx="1"/><rect x="3" y="14" width="18" height="6" rx="1"/><path d="M7 7h.01M7 17h.01"/>'};
+  ["Evaluation",["bench","compare","runs"]],["Trust & governance",["safety","reg"]],["System",["infra","cost"]]];
+const NAV_IC={cost:'<circle cx="12" cy="12" r="9"/><path d="M15 9.5a3 3 0 0 0-5 0v5a3 3 0 0 0 5 0M8 11h5M8 13h5"/>',overview:'<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',explain:'<path d="M4 5h16M4 10h16M4 15h10M4 20h7"/>',train:'<path d="M3 20l6-7 4 4 8-10"/><path d="M15 7h6v6"/>',val:'<path d="M5 12l5 5L20 7"/>',epochs:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16M15 4v16"/>',tasks:'<path d="M12 3l9 9-9 9-9-9z"/>',world:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',neurons:'<circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="M7.5 7.5l3.5 9M16.5 7.5l-3.5 9M8 6h8"/>',where:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',examples:'<path d="M5 5h14v10H9l-4 4z"/>',graphs:'<circle cx="5" cy="12" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="19" cy="19" r="2"/><path d="M7 11l10-5M7 13l10 5"/>',bench:'<path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/>',compare:'<path d="M7 4L3 8l4 4M3 8h14M17 12l4 4-4 4M21 16H7"/>',runs:'<path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>',safety:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',reg:'<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h7"/>',infra:'<rect x="3" y="4" width="18" height="6" rx="1"/><rect x="3" y="14" width="18" height="6" rx="1"/><path d="M7 7h.01M7 17h.01"/>'};
 const $=id=>document.getElementById(id);
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const PAL=["#2563eb","#dc2626","#16a34a","#d97706","#9333ea","#0891b2","#db2777","#65a30d","#ea580c","#4f46e5","#0d9488","#a16207"];
@@ -238,7 +251,7 @@ function syncURL(push){const p=new URLSearchParams();p.set("tab",tab);
 addEventListener("popstate",()=>{const q=new URLSearchParams(location.search).get("tab");if(q&&TAB_LABEL[q]&&q!==tab){tab=q;showTab();}});
 function showTab(push){document.querySelectorAll("nav button[data-t]").forEach(b=>b.classList.toggle("on",b.dataset.t===tab));document.querySelectorAll(".tab").forEach(s=>s.classList.toggle("on",s.id==="t-"+tab));
   const g=(NAV.find(([,ks])=>ks.includes(tab))||[""])[0];$("crumb").innerHTML=`${esc(g)} › <b>${esc(TAB_LABEL[tab]||tab)}</b>`;
-  if(tab==="runs")runsTab(true);if(tab==="compare")compareTab(true);if(tab==="bench")benchTab(true);if(tab==="safety")safetyTab();if(tab==="reg")regCard();if(DATA)render();
+  if(tab==="runs")runsTab(true);if(tab==="compare")compareTab(true);if(tab==="bench")benchTab(true);if(tab==="safety")safetyTab();if(tab==="cost")costTab(true);if(tab==="reg")regCard();if(DATA)render();
   const on=document.querySelector(`nav button[data-t="${tab}"]`);if(on&&innerWidth<=900)on.scrollIntoView({inline:"center",block:"nearest"});
   setTimeout(navToc,0);setTimeout(navToc,1500);syncURL(push===true);}
 function resetCharts(){Object.values(charts).forEach(c=>c.destroy());charts={};["g-train","g-val","g-where","g-neurons","g-epochs","g-tasks","g-cmp","g-world","g-bench"].forEach(g=>$(g).innerHTML="");}
@@ -854,6 +867,90 @@ const armName=a=>{const i=a.indexOf("__");return i<0?esc(a):`${esc(a.slice(i+2))
 const bfmt=(v,k)=>v==null||isNaN(v)?"–":k==="n"?v.toFixed(v%1?1:0):k==="x"?v.toFixed(2)+"×":k==="dx"?(v>=0?"+":"")+v.toFixed(2)+"×":k==="%"?pct(v):k==="c"?v.toFixed(2):k==="s"?Math.round(v)+" s":fmt(v);
 const mstd=a=>{const v=a.filter(x=>x!=null&&!isNaN(x));if(!v.length)return [null,null,0];const m=v.reduce((p,c)=>p+c,0)/v.length;return [m,v.length>1?Math.sqrt(v.reduce((p,c)=>p+(c-m)**2,0)/(v.length-1)):null,v.length];};
 let benchInit=false;
+// ---- Cost & efficiency: measured (final.cost, infra/cost.py) where a run recorded it, else estimated from its time
+const A100_W=400,TOK_PER_INST=189,PEAK_BF16={A100:312e12,H100:989e12,H200:989e12,L40S:362e12,V100:125e12};
+const migFrac=n=>{const m=/(\d)g\.\d+gb/i.exec(n||"");return m?+m[1]/7:1;};
+const runAvgPct=d=>{const T=(d.final||{}).tasks;if(!T||T.note)return null;const v=TASK_KEYS.map(k=>tmPct(T,k)).filter(x=>x&&x.v!=null).map(x=>x.v);return v.length?100*v.reduce((a,b)=>a+b,0)/v.length:null;};
+function runCost(d,P){
+  const F=d.final||{},C=F.cost||{},sec=F.train_sec||0,dev=C.device||(d.config||{}).device||"";
+  const gpu=!!C.device||/cuda|gpu/i.test(dev),frac=C.slice_fraction??migFrac(dev),gpuH=gpu?sec/3600:0,a100H=gpuH*frac;
+  let kwh,src;
+  if(C.gpu_kwh!=null&&C.measured_sec>0){kwh=C.gpu_kwh*Math.max(1,sec/C.measured_sec)*P.pue;src=C.measured_sec<0.95*sec?"mixed":"measured";}
+  else{kwh=a100H*A100_W/1000*P.pue;src="estimated";}
+  const fam=famOf(d),params=F.params_trainable||null,seen=F.samples_seen||0;
+  const flops=fam!=="comparison"&&params&&seen?6*params*seen*TOK_PER_INST:null;
+  const pk=Object.entries(PEAK_BF16).find(([k])=>dev.includes(k));
+  return {sec,gpuH,a100H,kwh,kg:kwh*P.grid,eur:a100H*P.eur,src,fam,params,flops,
+    mfu:flops&&pk&&sec?flops/(sec*pk[1]*frac):null,sps:seen&&sec?seen/sec:null,
+    msq:fam==="comparison"&&F.n_eval&&sec?1000*sec/F.n_eval:null,
+    gmem:C.gpu_mem_peak_gb??null,cmem:C.cpu_mem_peak_gb??null,q:runAvgPct(d)};
+}
+const hms=s=>s==null?"–":s>=3600?(s/3600).toFixed(1)+" h":s>=60?(s/60).toFixed(1)+" min":Math.round(s)+" s";
+const num=(v,d=1)=>v==null||isNaN(v)?"–":(+v).toFixed(d);
+const big=v=>v==null||isNaN(v)?"–":v>=1e9?(v/1e9).toFixed(1)+"B":v>=1e6?(v/1e6).toFixed(1)+"M":v>=1e3?(v/1e3).toFixed(1)+"k":String(Math.round(v));
+const avg=a=>{const v=a.filter(x=>x!=null&&!isNaN(x));return v.length?v.reduce((p,c)=>p+c,0)/v.length:null;};
+const sum=a=>a.reduce((p,c)=>p+(c||0),0);
+let costInit=false,lastCostFetch=0;
+async function costTab(force){
+  const now=Date.now();if(!force&&costInit&&now-lastCostFetch<10000)return;lastCostFetch=now;
+  try{RUNS=await allRuns();}catch(e){$("cost-meta").textContent="no runs yet";return;}
+  const got=await Promise.all(RUNS.map(r=>ALL[r.path]&&String(ALL[r.path].status).startsWith("done")?ALL[r.path]:j(r.path).catch(()=>null)));
+  got.forEach((d,i)=>{if(d)ALL[RUNS[i].path]=d;});
+  const D=got.filter(d=>d&&d.final&&d.final.train_sec!=null);
+  const exps=[...new Set(D.map(d=>d.experiment||"single"))],sel=$("cost-exp");
+  const opts=`<option value="">all experiments</option>`+exps.map(e=>`<option>${esc(e)}</option>`).join("");
+  if(sel.dataset.o!==opts){const v=sel.value;sel.innerHTML=opts;sel.dataset.o=opts;sel.value=exps.includes(v)?v:"";}
+  if(!costInit){costInit=true;["cost-exp","cost-eur","cost-grid","cost-pue"].forEach(id=>$(id).oninput=$(id).onchange=()=>costTab(true));}
+  const P={eur:+$("cost-eur").value||0,grid:+$("cost-grid").value||0,pue:+$("cost-pue").value||1};
+  const E=sel.value,runs=D.filter(d=>!E||(d.experiment||"single")===E).map(d=>({d,c:runCost(d,P)}));
+  if(!runs.length){$("cost-kpi").innerHTML='<div class="empty">No finished run yet.</div>';$("cost-table").innerHTML="";$("cost-data").innerHTML="";$("cost-plot").innerHTML="";$("cost-meta").textContent="";return;}
+  const key=d=>{const a=d.arm||d.name;const i=a.indexOf("__");return i<0?a:a.slice(i+2);};
+  const G={};runs.forEach(r=>(G[key(r.d)]=G[key(r.d)]||[]).push(r));
+  const rows=Object.entries(G).map(([m,rs])=>{const c=rs.map(r=>r.c),srcs=new Set(c.map(x=>x.src));
+    return {m,fam:c[0].fam,n:rs.length,sec:avg(c.map(x=>x.sec)),gpuH:sum(c.map(x=>x.gpuH)),a100H:sum(c.map(x=>x.a100H)),
+      gmem:Math.max(...c.map(x=>x.gmem??-1)),cmem:Math.max(...c.map(x=>x.cmem??-1)),params:c[0].params,flops:avg(c.map(x=>x.flops)),
+      mfu:avg(c.map(x=>x.mfu)),sps:avg(c.map(x=>x.sps)),msq:avg(c.map(x=>x.msq)),kwh:sum(c.map(x=>x.kwh)),kg:sum(c.map(x=>x.kg)),
+      eur:sum(c.map(x=>x.eur)),q:avg(c.map(x=>x.q)),src:srcs.size>1?"mixed":[...srcs][0],
+    I:rs[0].d.index||{},cfg:rs[0].d.config||{},ep:avg(rs.map(r=>((r.d.final||{}).run_length||{}).epochs_trained)),
+    best:avg(rs.map(r=>((r.d.final||{}).run_length||{}).best_epoch)),steps:avg(rs.map(r=>((r.d.final||{}).run_length||{}).steps)),
+    seen:avg(rs.map(r=>(r.d.final||{}).samples_seen||null)),wall:sum(c.map(x=>x.sec))};}).sort((a,b)=>b.gpuH-a.gpuH);
+  const T=k=>sum(rows.map(r=>r[k])),est=runs.filter(r=>r.c.src==="estimated").length;
+  $("cost-meta").textContent=`${runs.length} runs · ${rows.length} methods · ${est} run${est===1?"":"s"} estimated from their time`;
+  $("cost-kpi").innerHTML=kpi("GPU-hours",num(T("gpuH")),"one GPU or slice per run")+kpi("A100-equivalent hours",num(T("a100H")),"slice share of a full A100")+
+    kpi("energy",num(T("kwh"))+" kWh",`× PUE ${P.pue}`)+kpi("CO₂e",num(T("kg"))+" kg",`${P.grid} kg/kWh`)+kpi("cost","€ "+Math.round(T("eur")),`€ ${P.eur} per A100-hour`)+
+    kpi("training time",hms(T("wall")),`all ${runs.length} runs, longest ${hms(Math.max(...runs.map(r=>r.c.sec)))}`)+
+    kpi("papers",big(Math.max(...rows.map(r=>r.I.papers||0))||null),(()=>{const S=(rows.find(r=>r.I.splits)||{}).I?.splits;return S?`train ${big(S.train)} · val ${big(S.val)} · test ${big(S.test)}`:"";})())+
+    kpi("knowledge units",big(Math.max(...rows.map(r=>r.I.kus||0))||null),"KUs in the graph")+
+    kpi("instances seen",big(sum(runs.map(r=>(r.d.final||{}).samples_seen||0))||null),"training instances, all runs");
+  const SRC={measured:"var(--good)",mixed:"var(--warn)",estimated:"var(--muted)"};
+  const mem=v=>v<0?"–":num(v)+" GB";
+  $("cost-table").innerHTML=`<tr><th>method</th><th>family</th><th class="num">runs</th><th class="num">time / run</th><th class="num">GPU-h</th><th class="num">A100-eq h</th><th class="num">peak GPU mem</th><th class="num">peak CPU mem</th><th class="num">params</th><th class="num">train FLOPs / run</th><th class="num">MFU</th><th class="num">samples / s</th><th class="num">ms / query</th><th class="num">kWh</th><th class="num">kg CO₂e</th><th class="num">€</th><th class="num">€ / run</th><th class="num">quality %</th><th>source</th></tr>`+
+    rows.map(r=>`<tr><td>${esc(r.m)}</td><td style="white-space:nowrap">${famPill(r.fam)}</td><td class="num">${r.n}</td><td class="num">${hms(r.sec)}</td><td class="num">${num(r.gpuH,2)}</td><td class="num">${num(r.a100H,2)}</td>`+
+      `<td class="num">${mem(r.gmem)}</td><td class="num">${mem(r.cmem)}</td><td class="num">${big(r.params)}</td><td class="num">${r.flops?r.flops.toExponential(2):"–"}</td><td class="num">${r.mfu==null?"–":(100*r.mfu).toFixed(1)+" %"}</td>`+
+      `<td class="num">${r.sps==null?"–":Math.round(r.sps)}</td><td class="num">${r.msq==null?"–":num(r.msq,1)}</td><td class="num">${num(r.kwh,2)}</td><td class="num">${num(r.kg,2)}</td><td class="num">${num(r.eur,2)}</td><td class="num">${num(r.eur/r.n,2)}</td>`+
+      `<td class="num">${num(r.q,1)}</td><td><span class="pill" style="background:${SRC[r.src]}">${r.src}</span></td></tr>`).join("");
+  $("cost-data").innerHTML=`<tr><th>method</th><th>family</th><th class="num">runs</th><th class="num">papers</th><th class="num">train / val / test</th><th class="num">KUs</th><th class="num">epochs</th><th class="num">best epoch</th><th class="num">steps</th><th class="num">batch</th><th class="num">instances seen</th><th class="num">time / run</th><th class="num">wall-clock</th></tr>`+
+    rows.map(r=>{const S=r.I.splits,cmp=r.fam==="comparison",tr=v=>cmp?"–":v;return `<tr><td>${esc(r.m)}</td><td style="white-space:nowrap">${famPill(r.fam)}</td><td class="num">${r.n}</td><td class="num">${big(r.I.papers)}</td><td class="num">${S?`${big(S.train)} / ${big(S.val)} / ${big(S.test)}`:"–"}</td><td class="num">${big(r.I.kus)}</td>`+
+      `<td class="num">${tr(num(r.ep))}</td><td class="num">${tr(num(r.best))}</td><td class="num">${tr(big(r.steps))}</td><td class="num">${tr(r.cfg.batch_size??"–")}</td><td class="num">${big(r.seen)}</td><td class="num">${hms(r.sec)}</td><td class="num">${hms(r.wall)}</td></tr>`;}).join("");
+  costPlot(rows.filter(r=>r.q!=null).map(r=>({...r,x:Math.max(r.eur/r.n,0.01)})));
+}
+function costPlot(pts){
+  if(!pts.length){$("cost-plot").innerHTML='<div class="empty">Appears when finished runs have reasoning-task scores.</div>';return;}
+  const W=760,H=320,L=52,R=16,Tp=12,B=40,xs=pts.map(p=>Math.log10(p.x)),x0=Math.floor(Math.min(...xs)),x1=Math.max(x0+1,Math.ceil(Math.max(...xs)));
+  const qs=pts.map(p=>p.q),y0=Math.max(0,Math.floor(Math.min(...qs)/10)*10),y1=Math.min(100,Math.max(y0+10,Math.ceil(Math.max(...qs)/10)*10));
+  const X=v=>L+(Math.log10(v)-x0)/(x1-x0)*(W-L-R),Y=v=>Tp+(1-(v-y0)/(y1-y0))*(H-Tp-B);
+  const front=pts.slice().sort((a,b)=>a.x-b.x).reduce((f,p)=>(!f.length||p.q>f[f.length-1].q?[...f,p]:f),[]);
+  const lab=new Set(front.map(p=>p.m));
+  let g="";for(let e=x0;e<=x1;e++)g+=`<line x1="${X(10**e)}" x2="${X(10**e)}" y1="${Tp}" y2="${H-B}" stroke="var(--line)"/><text x="${X(10**e)}" y="${H-B+16}" text-anchor="middle" font-size="11" fill="var(--muted)">€ ${10**e>=1?10**e:(10**e).toFixed(-e)}</text>`;
+  for(let v=y0;v<=y1;v+=10)g+=`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end" font-size="11" fill="var(--muted)">${v}%</text>`;
+  g+=`<text x="${(L+W-R)/2}" y="${H-6}" text-anchor="middle" font-size="11" fill="var(--muted)">€ per run (log scale)</text>`;
+  g+=`<polyline points="${front.map(p=>`${X(p.x)},${Y(p.q)}`).join(" ")}" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="4 4"/>`;
+  g+=pts.map(p=>`<g><circle cx="${X(p.x)}" cy="${Y(p.q)}" r="5" fill="${FAMCOL[p.fam]}" stroke="var(--panel)" stroke-width="2"><title>${esc(p.m)} · ${FAMILY[p.fam]}\n€ ${p.x.toFixed(2)} per run · ${p.q.toFixed(1)} % average · ${p.n} run${p.n>1?"s":""} · ${p.src}</title></circle>`+
+    (lab.has(p.m)?`<text x="${X(p.x)+8}" y="${Y(p.q)-6}" font-size="11" fill="var(--text)">${esc(p.m.length>28?p.m.slice(0,27)+"…":p.m)}</text>`:"")+`</g>`).join("");
+  const fams=[...new Set(pts.map(p=>p.fam))];
+  $("cost-plot").innerHTML=`<div class="row" style="gap:12px;margin-bottom:6px">${fams.map(f=>`<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px"><svg width="10" height="10"><circle cx="5" cy="5" r="5" fill="${FAMCOL[f]}"/></svg>${FAMILY[f]}</span>`).join("")}</div>`+
+    `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto" role="img" aria-label="quality against cost per run, one dot per method">${g}</svg>`;
+}
 async function v2Card(){
   let V;try{V=await j("paired_v2.json");}catch(e){$("v2-meta").textContent="";$("v2-verdict").innerHTML='<div class="empty">Not run yet: <code>sbatch cluster/grete/paired_eval.sbatch</code> (GPU) writes paired_v2.json into this dashboard.</div>';$("v2-table").innerHTML="";return;}
   const S=Object.entries(V.systems||{}).filter(([,r])=>r.point&&r.point.average!=null&&!isNaN(r.point.average)).sort((a,b)=>b[1].point.average-a[1].point.average);
@@ -1112,6 +1209,7 @@ async function poll(force){
   if(tab==="runs")runsTab(false);
   if(tab==="compare")compareTab(false);
   if(tab==="bench")benchTab(false);
+  if(tab==="cost")costTab(false);
 }
 if(new URLSearchParams(location.search).get("run"))$("follow").checked=false;
 const SAFE_COL={pass:"var(--good)",warn:"var(--warn)",fail:"var(--bad)"};

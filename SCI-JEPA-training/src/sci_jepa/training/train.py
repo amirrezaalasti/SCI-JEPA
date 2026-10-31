@@ -470,6 +470,8 @@ def train_one(cfg, gi, seed, log=print, live=None, save_dir=None, ckpt_path=None
     sampler = Sampler(gi, cfg, "train", seed)
     gen = torch.Generator(device=dev).manual_seed(seed)
     history, t0 = [], time.time()
+    from sci_jepa.infra.cost import RunMeter
+    meter = RunMeter(dev)                              # peak memory, GPU energy (dashboard: Cost & efficiency)
     n_steps, plan_fn, sched_info = mask_plan(cfg, sampler)
     sched = torch.optim.lr_scheduler.LambdaLR(opt, lr_factor(cfg, n_steps))   # warm-up, then constant / cosine
     log(f"  [lr] {cfg.lr_schedule}: warm-up {cfg.warmup} steps to {cfg.lr:g}"
@@ -763,6 +765,7 @@ def train_one(cfg, gi, seed, log=print, live=None, save_dir=None, ckpt_path=None
     metrics["epoch_results"] = epoch_results
     metrics["train_sec"] = round(time.time() - t0, 1)
     metrics["params_trainable"] = int(sum(p.numel() for p in params))
+    metrics["cost"] = meter.result()
     metrics["samples_seen"] = int(n_steps * cfg.batch_size)
     metrics["schedule"] = {**sched_info, "passes_completed": dict(getattr(sampler, "passes", {}))}
     metrics["run_length"] = {"max_epochs": cfg.epochs, "epochs_trained": epoch_of(last_step),
