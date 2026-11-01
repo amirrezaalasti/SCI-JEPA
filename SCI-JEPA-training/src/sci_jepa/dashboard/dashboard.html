@@ -179,11 +179,12 @@ dl{display:grid;grid-template-columns:220px 1fr;gap:6px 14px;margin:0}dt{font-we
  <section class="tab" id="t-cost">
   <div class="card"><h3>Cost &amp; efficiency: time, memory, energy, compute and money of every run</h3>
    <div class="row" style="flex-wrap:wrap;gap:10px"><select id="cost-exp" title="which experiment"></select>
-    <label>€ per A100-hour <input id="cost-eur" type="number" min="0" step="0.1" value="2" style="width:64px"></label>
+    <label title="GPU assumed for runs that recorded neither their GPU nor a SLURM job with an infrastructure record">GPU when not recorded <select id="cost-assume"></select></label>
+    <span id="cost-prices" class="row" style="flex-wrap:wrap;gap:10px"></span>
     <label>grid kg CO₂e/kWh <input id="cost-grid" type="number" min="0" step="0.01" value="0.38" style="width:72px"></label>
     <label>PUE <input id="cost-pue" type="number" min="1" step="0.05" value="1.2" style="width:56px"></label>
     <span class="muted" id="cost-meta"></span></div>
-   <p class="hint">Reported as in the literature on ML compute (Strubell et al. 2019, Henderson et al. 2020, Patterson et al. 2021, ML CO2 impact / CodeCarbon). <b>Time</b>: each run's own timer (training and evaluation of a model, or the whole evaluation of a comparison system). <b>GPU-hours</b> are hours on one GPU or GPU slice; a MIG slice xg.yygb counts as x/7 of an A100 (<b>A100-equivalent hours</b>). <b>Memory</b>: peak GPU memory allocated by PyTorch and peak resident memory of the process (an upper bound when one process trains several runs). <b>Energy</b>: measured from the GPU's energy counter (NVML) where the run recorded it; on a MIG slice the counter belongs to the whole GPU, so it is scaled by the slice share; otherwise estimated as A100-equivalent hours × 400 W. Both are multiplied by the PUE; CO₂e = energy × grid intensity; cost = A100-equivalent hours × the price above. <b>FLOPs</b> ≈ 6 × trainable parameters × instances seen × 189 tokens (JEPA models; the same estimate as the compliance report); <b>MFU</b> = FLOPs ÷ (time × peak bf16 FLOP/s of the slice), with evaluation inside the time, so a lower bound. <b>Quality</b>: average % over the five reasoning tasks on test. Runs that finished before this accounting existed are estimated from their recorded time (<b>source</b>).</p>
+   <p class="hint">Reported as in the literature on ML compute (Strubell et al. 2019, Henderson et al. 2020, Patterson et al. 2021, ML CO2 impact / CodeCarbon). <b>Time</b>: each run's own timer (training and evaluation of a model, or the whole evaluation of a comparison system). <b>GPU</b>: the one the run trained on, as the run recorded it (newer runs), else from the infrastructure record of its SLURM job, else the GPU chosen above (marked <i>assumed</i>). <b>GPU-hours</b> are hours on one GPU or GPU slice, per GPU type; a MIG slice xg.yygb counts as x/7 of its GPU. <b>Memory</b>: peak GPU memory allocated by PyTorch and peak resident memory of the process (an upper bound when one process trains several runs). <b>Energy</b>: measured from the GPU's energy counter (NVML) where the run recorded it; on a MIG slice the counter belongs to the whole GPU, so it is scaled by the slice share; otherwise estimated as GPU-hours × the board power of that GPU (L40S 350 W, H100 NVL 400 W, RTX A5000 230 W, RTX 3090 350 W). Both are multiplied by the PUE; CO₂e = energy × grid intensity; cost = GPU-hours × the price per hour of that GPU above. <b>FLOPs</b> ≈ 6 × trainable parameters × instances seen × 189 tokens (JEPA models; the same estimate as the compliance report); <b>MFU</b> = FLOPs ÷ (time × dense bf16 peak FLOP/s of that GPU or slice), with evaluation inside the time, so a lower bound. <b>Quality</b>: average % over the five reasoning tasks on test. Runs that finished before this accounting existed are estimated from their recorded time (<b>source</b>).</p>
    <div class="kpis" id="cost-kpi"></div></div>
   <div class="card"><h3>Per method (sum over seeds; time and memory per run)</h3><div class="scroll"><table id="cost-table"></table></div></div>
   <div class="card"><h3>Data and run length per method</h3><p class="hint">How much data each method saw and how long it ran. <b>Papers</b> and <b>KUs</b>: the KU graph the run trained on (train / val / test papers by the time split). <b>Epochs</b> and <b>steps</b>: mean per run (best epoch = the one kept by model selection). <b>Instances seen</b> = steps × batch size. <b>Wall-clock</b>: total over all runs of the method.</p><div class="scroll"><table id="cost-data"></table></div></div>
@@ -191,7 +192,7 @@ dl{display:grid;grid-template-columns:220px 1fr;gap:6px 14px;margin:0}dt{font-we
  </section>
  <section class="tab" id="t-infra"><iframe src="infra.html" title="training infrastructure, live" style="width:100%;height:calc(100vh - 120px);border:0;background:transparent"></iframe></section>
  <section class="tab" id="t-runs">
-  <div class="card"><h3>All runs (live)</h3><p class="hint">Every model trained so far, refreshed every few seconds. Click a run name to open it.</p><div class="scroll"><table id="runs-table"></table></div></div>
+  <div class="card"><h3>All runs (live)</h3><p class="hint">Every model trained so far, refreshed every few seconds. Click a run name to open it. <b>Model</b>: graph encoder (width × encoder + predictor layers) and the text encoder of the KU features, or the comparison system. <b>GPU</b>: as the run recorded it, else from the infrastructure record of its SLURM job. <b>Params</b>: trainable parameters. <b>Data</b>: papers in the KU graph (train / val / test), its knowledge units, and the training instances seen (planned while a run trains).</p><div class="scroll"><table id="runs-table"></table></div></div>
   <div class="card"><div class="row"><b>Reasoning tasks: every run</b><span class="muted" style="font-size:12px" title="each run scored on its own question sample; see the paired benchmark (Benchmark tab) for the audit-fixed protocol v2">protocol v1</span><select id="tm-src"><option value="best">test if finished, else latest epoch</option><option value="val">latest epoch (validation)</option></select></div>
    <p class="hint">One row per run, one column per reasoning task (see the Reasoning tasks tab). <b>Main method</b>: the approach behind the run (lexical retrieval, text embeddings, LLM, JEPA, JEPA + GNN, Graph-JEPA, world model). <b>KU as</b>: whether knowledge units are graph nodes (typed edges) or plain text; hover a label for details. Sorted best to worst by the average % (mean of the five task scores, each task counts the same; * = fewer than 5 tasks scored). The reasoning index (×chance) is shown for reference. All task scores in %: retrieval tasks (forward, inverse, abduction) = balanced MRR (hover for ×chance, Hits@1, Hits@10); consistency = balanced accuracy (chance 50%); intervention = share of predictions that move toward the donor's result when the condition is swapped (chance 50%).</p>
    <div class="scroll"><table id="tm-table"></table></div></div>
@@ -768,15 +769,16 @@ $("cmp-metric").innerHTML=Object.keys(CMP).map(k=>`<option>${k}</option>`).join(
 async function runsTab(force){
   const now=Date.now();if(!force&&now-lastRunsFetch<4000)return;lastRunsFetch=now;
   try{RUNS=await allRuns();}catch(e){return;}
-  const got=await Promise.all(RUNS.map(r=>(r.path===RUN&&DATA)?Promise.resolve(DATA):j(r.path).catch(()=>null)));
+  const [got]=await Promise.all([Promise.all(RUNS.map(r=>(r.path===RUN&&DATA)?Promise.resolve(DATA):j(r.path).catch(()=>null))),jobGpus()]);
   got.forEach((d,i)=>{if(d)ALL[RUNS[i].path]=d;});
   const ok=RUNS.map(r=>ALL[r.path]).filter(Boolean);
-  $("runs-table").innerHTML=`<tr><th>run</th><th>status</th><th>progress</th><th>epoch</th><th>KUs</th><th>masking</th><th>N</th><th>train loss</th><th>cos</th><th>val bal. MRR</th><th>chance</th><th>probe</th><th>id. neurons</th><th>pred learned</th><th>test bal. MRR</th><th>verdict</th></tr>`+ok.slice().reverse().map(d=>{
+  $("runs-table").innerHTML=`<tr><th>run</th><th>status</th><th>model</th><th>GPU</th><th class="num">params</th><th class="num">papers (train / val / test)</th><th class="num">KUs</th><th class="num">instances</th><th>progress</th><th>epoch</th><th>KU mode</th><th>masking</th><th>N</th><th>train loss</th><th>cos</th><th>val bal. MRR</th><th>chance</th><th>probe</th><th>id. neurons</th><th>pred learned</th><th>test bal. MRR</th><th>verdict</th></tr>`+ok.slice().reverse().map(d=>{
     const H=d.history||[],E=d.evals||[],h=H[H.length-1]||{},e=E[E.length-1]||{},F=d.final||{},rb=F.retrieval_balanced||{},nl=(d.neuron_timeline||[]).slice(-1)[0];
     const L=nl?nl.layers[nl.layers.length-1]:null,idp=L?L.counts.identity/ncount(L):null;
     const r=e.bal_MRR/(e.bal_chance||1);const verdict=e.bal_MRR==null?"–":r>2?'<span class="ok">learning</span>':r>1.3?'<span class="wa">weak</span>':(h.cos_pred_target>0.95?'<span class="no">shortcut (cos≈1, MRR≈chance)</span>':'<span class="no">at chance</span>');
     const prog=h.step!=null?Math.round(100*(h.step+1)/(d.steps_total||1)):0,stt=String(d.status).split(":")[0];
-    return `<tr><td><a href="#" data-run="runs/${esc(d.name)}/live.json">${esc(d.name)}</a></td><td><span class="badge ${stt}">${esc(stt)}</span></td><td class="num">${prog}%</td><td class="num">${fmt(h.epoch,2)}${d.epochs_total?"/"+fmt(d.epochs_total,2):""}</td><td>${MODE_NAME[d.config.ku_mode]||"sections"}</td><td>${esc((d.schedule||{}).schedule||"")}${h.phase&&h.phase!=="mixed"?" · "+esc(h.phase):""}</td><td class="num">${d.config.n_subgraphs}</td><td class="num">${fmt(h.jepa,4)}</td><td class="num">${fmt(h.cos_pred_target,3)}</td><td class="num">${fmt(e.bal_MRR)}</td><td class="num">${fmt(e.bal_chance)}</td><td class="num">${fmt(e.probe_acc,2)}</td><td class="num">${pct(idp)}</td><td class="num">${nl?nl.pred_learned+"/"+nl.pred_n:"–"}</td><td class="num">${fmt(rb.MRR)}</td><td>${verdict}</td></tr>`;}).join("");
+    return `<tr><td><a href="#" data-run="runs/${esc(d.name)}/live.json">${esc(d.name)}</a></td><td><span class="badge ${stt}">${esc(stt)}</span></td><td style="white-space:nowrap">${runModel(d)}</td><td style="white-space:nowrap">${gpuCell(runGpu(d).name?runGpu(d):null)}</td>`+
+      `<td class="num">${big(F.params_trainable||d.params_trainable||null)}</td><td class="num">${runPapers(d)}</td><td class="num">${big((d.index||{}).kus)}</td><td class="num" title="${F.samples_seen?"seen":"planned: steps × batch size"}">${big(F.samples_seen||(d.steps_total&&d.config.batch_size?d.steps_total*d.config.batch_size:null))}</td><td class="num">${prog}%</td><td class="num">${fmt(h.epoch,2)}${d.epochs_total?"/"+fmt(d.epochs_total,2):""}</td><td>${MODE_NAME[d.config.ku_mode]||"sections"}</td><td>${esc((d.schedule||{}).schedule||"")}${h.phase&&h.phase!=="mixed"?" · "+esc(h.phase):""}</td><td class="num">${d.config.n_subgraphs}</td><td class="num">${fmt(h.jepa,4)}</td><td class="num">${fmt(h.cos_pred_target,3)}</td><td class="num">${fmt(e.bal_MRR)}</td><td class="num">${fmt(e.bal_chance)}</td><td class="num">${fmt(e.probe_acc,2)}</td><td class="num">${pct(idp)}</td><td class="num">${nl?nl.pred_learned+"/"+nl.pred_n:"–"}</td><td class="num">${fmt(rb.MRR)}</td><td>${verdict}</td></tr>`;}).join("");
   $("runs-table").querySelectorAll("a[data-run]").forEach(a=>a.onclick=ev=>{ev.preventDefault();$("follow").checked=false;selectRun(a.dataset.run);tab="overview";showTab(true);});
   ptTable(ok);epochMatrix(ok);taskMatrix(ok);
   const [src,key]=CMP[$("cmp-metric").value];
@@ -787,6 +789,13 @@ async function runsTab(force){
   line("cmp",ds,{ymin:0});
 }
 
+// what was trained: the comparison system, or graph encoder (width × encoder + predictor layers) and text encoder
+function runModel(d){
+  const c=d.config||{},te=c.embed_model?String(c.embed_model).split("/").pop():"";
+  if(c.baseline)return `<span title="comparison system">${esc(c.baseline)}</span>`;
+  return `<span title="graph encoder ${esc(c.encoder||"transformer")}, d_model ${c.d_model}, ${c.enc_layers} encoder + ${c.pred_layers} predictor layers; KU text encoder ${esc(c.embed_model||"–")}">${esc(c.encoder||"transformer")} ${c.d_model}d · ${c.enc_layers}+${c.pred_layers}L${te?` <span class="muted">${esc(te)}</span>`:""}</span>`;
+}
+const runPapers=d=>{const I=d.index||{},S=I.splits;return S?`${big(I.papers)} <span class="muted">(${big(S.train)} / ${big(S.val)} / ${big(S.test)})</span>`:big(I.papers);};
 function ptTable(ok){
   const T=["context","question","method","procedure","result","interpretation","limitation","claim","evidence","implication","paper"];
   const test=$("pt-src").value==="test",ratio=$("pt-val").value==="ratio";
@@ -868,20 +877,48 @@ const bfmt=(v,k)=>v==null||isNaN(v)?"–":k==="n"?v.toFixed(v%1?1:0):k==="x"?v.t
 const mstd=a=>{const v=a.filter(x=>x!=null&&!isNaN(x));if(!v.length)return [null,null,0];const m=v.reduce((p,c)=>p+c,0)/v.length;return [m,v.length>1?Math.sqrt(v.reduce((p,c)=>p+(c-m)**2,0)/(v.length-1)):null,v.length];};
 let benchInit=false;
 // ---- Cost & efficiency: measured (final.cost, infra/cost.py) where a run recorded it, else estimated from its time
-const A100_W=400,TOK_PER_INST=189,PEAK_BF16={A100:312e12,H100:989e12,H200:989e12,L40S:362e12,V100:125e12};
+const TOK_PER_INST=189;
+// per GPU type: board power (W, energy estimate), dense bf16 peak (FLOP/s, MFU), default € per GPU-hour (editable).
+// Matched by substring in order, so "H100 NVL" before "H100".
+const GPU_SPEC={"L40S":{w:350,bf16:362e12,eur:1.0},"H100 NVL":{w:400,bf16:835e12,eur:2.5},"H100":{w:700,bf16:989e12,eur:3.0},
+  "H200":{w:700,bf16:989e12,eur:3.5},"A100":{w:400,bf16:312e12,eur:1.5},"RTX A5000":{w:230,bf16:111e12,eur:0.4},
+  "RTX 3090":{w:350,bf16:71e12,eur:0.3},"V100":{w:300,bf16:125e12,eur:0.8}};
+const gpuKey=n=>n?Object.keys(GPU_SPEC).find(k=>n.includes(k))||n.replace(/^NVIDIA\s+(GeForce\s+)?/,"").replace(/\s+MIG.*/,""):null;
 const migFrac=n=>{const m=/(\d)g\.\d+gb/i.exec(n||"");return m?+m[1]/7:1;};
+// SLURM job -> GPU name, from the Infrastructure page's per-job files (hosted: listed from the manifest)
+let JOBGPU={},jobGpuAt=0;
+async function jobGpus(){
+  if(Date.now()-jobGpuAt<60000)return JOBGPU;jobGpuAt=Date.now();
+  let keys=[];
+  try{keys=window.SCIJEPA_HOSTED?Object.keys(await window.SCIJEPA_HOSTED.manifest()).map(p=>(p.match(/^infra\/jobs\/([^/]+)\.json$/)||[])[1]).filter(Boolean):await j("infra/jobs.json");}catch(e){}
+  const M={};
+  await Promise.all(keys.map(k=>j(`infra/jobs/${encodeURIComponent(k)}.json`).then(d=>{
+    const s=d.system||{},g=((d.now||{}).gpus||[])[0],name=g?g.name:(/GPU \d+:\s*([^(]+)\(/.exec(s.gpus||"")||[])[1];
+    if(s.job&&name)M[s.job]=name.trim();},()=>null)));
+  return JOBGPU=M;
+}
+// the GPU a run trained on: recorded by the run (cost meter, run start), else its latest SLURM job's record
+function runGpu(d){
+  const C=(d.final||{}).cost||{};
+  if(C.device)return {name:C.device,src:"recorded"};
+  if(d.gpu)return {name:d.gpu,src:"recorded"};
+  const jobs=[...(((d.imported||{}).jobs)||[]),d.job,...(d.resumed||[]).map(r=>r&&r.job)].filter(Boolean).reverse();
+  for(const jb of jobs)if(JOBGPU[jb])return {name:JOBGPU[jb],src:"job "+jb};
+  return {name:null,src:jobs.length?"job "+jobs[0]+" has no infrastructure record":"not recorded"};
+}
+const gpuCell=(g,assumed)=>g?`<span title="${esc(assumed?"assumed (not recorded)":g.src)}">${esc(gpuKey(g.name))}${assumed?' <i class="muted">assumed</i>':""}</span>`:'<span class="muted" title="not recorded">–</span>';
 const runAvgPct=d=>{const T=(d.final||{}).tasks;if(!T||T.note)return null;const v=TASK_KEYS.map(k=>tmPct(T,k)).filter(x=>x&&x.v!=null).map(x=>x.v);return v.length?100*v.reduce((a,b)=>a+b,0)/v.length:null;};
 function runCost(d,P){
-  const F=d.final||{},C=F.cost||{},sec=F.train_sec||0,dev=C.device||(d.config||{}).device||"";
-  const gpu=!!C.device||/cuda|gpu/i.test(dev),frac=C.slice_fraction??migFrac(dev),gpuH=gpu?sec/3600:0,a100H=gpuH*frac;
+  const F=d.final||{},C=F.cost||{},sec=F.train_sec||0,G=runGpu(d),dev=(d.config||{}).device||"";
+  const gpu=!!G.name||/cuda|gpu/i.test(dev),name=G.name||(gpu?P.assume:null),gk=gpuKey(name),S=GPU_SPEC[gk]||{};
+  const frac=C.slice_fraction??migFrac(name),gpuH=gpu?sec/3600:0,fullH=gpuH*frac;
   let kwh,src;
   if(C.gpu_kwh!=null&&C.measured_sec>0){kwh=C.gpu_kwh*Math.max(1,sec/C.measured_sec)*P.pue;src=C.measured_sec<0.95*sec?"mixed":"measured";}
-  else{kwh=a100H*A100_W/1000*P.pue;src="estimated";}
+  else{kwh=fullH*(S.w||300)/1000*P.pue;src="estimated";}
   const fam=famOf(d),params=F.params_trainable||null,seen=F.samples_seen||0;
   const flops=fam!=="comparison"&&params&&seen?6*params*seen*TOK_PER_INST:null;
-  const pk=Object.entries(PEAK_BF16).find(([k])=>dev.includes(k));
-  return {sec,gpuH,a100H,kwh,kg:kwh*P.grid,eur:a100H*P.eur,src,fam,params,flops,
-    mfu:flops&&pk&&sec?flops/(sec*pk[1]*frac):null,sps:seen&&sec?seen/sec:null,
+  return {sec,gpuH,gk,g:G.name?G:(gpu?{name,src:"assumed"}:null),assumed:gpu&&!G.name,kwh,kg:kwh*P.grid,eur:fullH*(P.price[gk]??0),src,fam,params,flops,
+    mfu:flops&&S.bf16&&sec?flops/(sec*S.bf16*frac):null,sps:seen&&sec?seen/sec:null,
     msq:fam==="comparison"&&F.n_eval&&sec?1000*sec/F.n_eval:null,
     gmem:C.gpu_mem_peak_gb??null,cmem:C.cpu_mem_peak_gb??null,q:runAvgPct(d)};
 }
@@ -890,42 +927,57 @@ const num=(v,d=1)=>v==null||isNaN(v)?"–":(+v).toFixed(d);
 const big=v=>v==null||isNaN(v)?"–":v>=1e9?(v/1e9).toFixed(1)+"B":v>=1e6?(v/1e6).toFixed(1)+"M":v>=1e3?(v/1e3).toFixed(1)+"k":String(Math.round(v));
 const avg=a=>{const v=a.filter(x=>x!=null&&!isNaN(x));return v.length?v.reduce((p,c)=>p+c,0)/v.length:null;};
 const sum=a=>a.reduce((p,c)=>p+(c||0),0);
-let costInit=false,lastCostFetch=0;
+let costInit=false,lastCostFetch=0;const PRICE={};
 async function costTab(force){
   const now=Date.now();if(!force&&costInit&&now-lastCostFetch<10000)return;lastCostFetch=now;
   try{RUNS=await allRuns();}catch(e){$("cost-meta").textContent="no runs yet";return;}
-  const got=await Promise.all(RUNS.map(r=>ALL[r.path]&&String(ALL[r.path].status).startsWith("done")?ALL[r.path]:j(r.path).catch(()=>null)));
+  const [got]=await Promise.all([Promise.all(RUNS.map(r=>ALL[r.path]&&String(ALL[r.path].status).startsWith("done")?ALL[r.path]:j(r.path).catch(()=>null))),jobGpus()]);
   got.forEach((d,i)=>{if(d)ALL[RUNS[i].path]=d;});
   const D=got.filter(d=>d&&d.final&&d.final.train_sec!=null);
   const exps=[...new Set(D.map(d=>d.experiment||"single"))],sel=$("cost-exp");
   const opts=`<option value="">all experiments</option>`+exps.map(e=>`<option>${esc(e)}</option>`).join("");
   if(sel.dataset.o!==opts){const v=sel.value;sel.innerHTML=opts;sel.dataset.o=opts;sel.value=exps.includes(v)?v:"";}
-  if(!costInit){costInit=true;["cost-exp","cost-eur","cost-grid","cost-pue"].forEach(id=>$(id).oninput=$(id).onchange=()=>costTab(true));}
-  const P={eur:+$("cost-eur").value||0,grid:+$("cost-grid").value||0,pue:+$("cost-pue").value||1};
-  const E=sel.value,runs=D.filter(d=>!E||(d.experiment||"single")===E).map(d=>({d,c:runCost(d,P)}));
+  // GPU for runs without a record: the GPU types in the records first, L40S by default
+  const seenG=[...new Set(D.map(d=>gpuKey(runGpu(d).name)).filter(Boolean))],as=$("cost-assume");
+  const aopts=[...new Set([...seenG,...Object.keys(GPU_SPEC)])].map(g=>`<option>${esc(g)}</option>`).join("");
+  if(as.dataset.o!==aopts){const v=as.value||"L40S";as.innerHTML=aopts;as.dataset.o=aopts;as.value=v;}
+  if(!costInit){costInit=true;["cost-exp","cost-assume","cost-grid","cost-pue"].forEach(id=>$(id).oninput=$(id).onchange=()=>costTab(true));}
+  const E=sel.value,DE=D.filter(d=>!E||(d.experiment||"single")===E),assume=as.value;
+  // one price per GPU type in use (€ per GPU-hour), kept while the page is open
+  const used=[...new Set(DE.map(d=>gpuKey(runGpu(d).name)||((d.config||{}).device||"").match(/cuda|gpu/i)&&gpuKey(assume)).filter(Boolean))];
+  used.forEach(g=>{if(PRICE[g]==null)PRICE[g]=(GPU_SPEC[g]||{}).eur??1;});
+  const pr=$("cost-prices"),pk=used.join("|");
+  if(pr.dataset.o!==pk){pr.dataset.o=pk;pr.innerHTML=used.map(g=>`<label>€ per ${esc(g)}-hour <input data-gpu="${esc(g)}" type="number" min="0" step="0.1" value="${PRICE[g]}" style="width:64px"></label>`).join("");
+    pr.querySelectorAll("input").forEach(i=>i.oninput=i.onchange=()=>{PRICE[i.dataset.gpu]=+i.value||0;costTab(true);});}
+  const P={price:PRICE,assume,grid:+$("cost-grid").value||0,pue:+$("cost-pue").value||1};
+  const runs=DE.map(d=>({d,c:runCost(d,P)}));
   if(!runs.length){$("cost-kpi").innerHTML='<div class="empty">No finished run yet.</div>';$("cost-table").innerHTML="";$("cost-data").innerHTML="";$("cost-plot").innerHTML="";$("cost-meta").textContent="";return;}
   const key=d=>{const a=d.arm||d.name;const i=a.indexOf("__");return i<0?a:a.slice(i+2);};
   const G={};runs.forEach(r=>(G[key(r.d)]=G[key(r.d)]||[]).push(r));
   const rows=Object.entries(G).map(([m,rs])=>{const c=rs.map(r=>r.c),srcs=new Set(c.map(x=>x.src));
-    return {m,fam:c[0].fam,n:rs.length,sec:avg(c.map(x=>x.sec)),gpuH:sum(c.map(x=>x.gpuH)),a100H:sum(c.map(x=>x.a100H)),
+    const gs=[...new Set(c.filter(x=>x.gk).map(x=>x.gk))];
+    return {m,fam:c[0].fam,n:rs.length,sec:avg(c.map(x=>x.sec)),gpuH:sum(c.map(x=>x.gpuH)),
+      gpu:gs.length?gs.map(g=>{const a=c.filter(x=>x.gk===g),na=a.filter(x=>x.assumed).length;
+        return gpuCell(a.find(x=>!x.assumed)?.g||a[0].g,na===a.length)+(gs.length>1?` <span class="muted">×${a.length}</span>`:"");}).join(", "):"–",
       gmem:Math.max(...c.map(x=>x.gmem??-1)),cmem:Math.max(...c.map(x=>x.cmem??-1)),params:c[0].params,flops:avg(c.map(x=>x.flops)),
       mfu:avg(c.map(x=>x.mfu)),sps:avg(c.map(x=>x.sps)),msq:avg(c.map(x=>x.msq)),kwh:sum(c.map(x=>x.kwh)),kg:sum(c.map(x=>x.kg)),
       eur:sum(c.map(x=>x.eur)),q:avg(c.map(x=>x.q)),src:srcs.size>1?"mixed":[...srcs][0],
     I:rs[0].d.index||{},cfg:rs[0].d.config||{},ep:avg(rs.map(r=>((r.d.final||{}).run_length||{}).epochs_trained)),
     best:avg(rs.map(r=>((r.d.final||{}).run_length||{}).best_epoch)),steps:avg(rs.map(r=>((r.d.final||{}).run_length||{}).steps)),
     seen:avg(rs.map(r=>(r.d.final||{}).samples_seen||null)),wall:sum(c.map(x=>x.sec))};}).sort((a,b)=>b.gpuH-a.gpuH);
-  const T=k=>sum(rows.map(r=>r[k])),est=runs.filter(r=>r.c.src==="estimated").length;
-  $("cost-meta").textContent=`${runs.length} runs · ${rows.length} methods · ${est} run${est===1?"":"s"} estimated from their time`;
-  $("cost-kpi").innerHTML=kpi("GPU-hours",num(T("gpuH")),"one GPU or slice per run")+kpi("A100-equivalent hours",num(T("a100H")),"slice share of a full A100")+
-    kpi("energy",num(T("kwh"))+" kWh",`× PUE ${P.pue}`)+kpi("CO₂e",num(T("kg"))+" kg",`${P.grid} kg/kWh`)+kpi("cost","€ "+Math.round(T("eur")),`€ ${P.eur} per A100-hour`)+
+  const T=k=>sum(rows.map(r=>r[k])),est=runs.filter(r=>r.c.src==="estimated").length,nas=runs.filter(r=>r.c.assumed).length;
+  const byG={};runs.forEach(r=>{if(r.c.gk)byG[r.c.gk]=(byG[r.c.gk]||0)+r.c.gpuH;});
+  $("cost-meta").textContent=`${runs.length} runs · ${rows.length} methods · ${est} run${est===1?"":"s"} estimated from their time`+(nas?` · GPU of ${nas} run${nas===1?"":"s"} not recorded (assumed ${assume})`:"");
+  $("cost-kpi").innerHTML=kpi("GPU-hours",num(T("gpuH")),Object.entries(byG).sort((a,b)=>b[1]-a[1]).map(([g,h])=>`${esc(g)} ${num(h)} h`).join(" · ")||"one GPU or slice per run")+
+    kpi("energy",num(T("kwh"))+" kWh",`× PUE ${P.pue}`)+kpi("CO₂e",num(T("kg"))+" kg",`${P.grid} kg/kWh`)+kpi("cost","€ "+Math.round(T("eur")),used.map(g=>`€ ${PRICE[g]} / ${esc(g)}-h`).join(" · "))+
     kpi("training time",hms(T("wall")),`all ${runs.length} runs, longest ${hms(Math.max(...runs.map(r=>r.c.sec)))}`)+
     kpi("papers",big(Math.max(...rows.map(r=>r.I.papers||0))||null),(()=>{const S=(rows.find(r=>r.I.splits)||{}).I?.splits;return S?`train ${big(S.train)} · val ${big(S.val)} · test ${big(S.test)}`:"";})())+
     kpi("knowledge units",big(Math.max(...rows.map(r=>r.I.kus||0))||null),"KUs in the graph")+
     kpi("instances seen",big(sum(runs.map(r=>(r.d.final||{}).samples_seen||0))||null),"training instances, all runs");
   const SRC={measured:"var(--good)",mixed:"var(--warn)",estimated:"var(--muted)"};
   const mem=v=>v<0?"–":num(v)+" GB";
-  $("cost-table").innerHTML=`<tr><th>method</th><th>family</th><th class="num">runs</th><th class="num">time / run</th><th class="num">GPU-h</th><th class="num">A100-eq h</th><th class="num">peak GPU mem</th><th class="num">peak CPU mem</th><th class="num">params</th><th class="num">train FLOPs / run</th><th class="num">MFU</th><th class="num">samples / s</th><th class="num">ms / query</th><th class="num">kWh</th><th class="num">kg CO₂e</th><th class="num">€</th><th class="num">€ / run</th><th class="num">quality %</th><th>source</th></tr>`+
-    rows.map(r=>`<tr><td>${esc(r.m)}</td><td style="white-space:nowrap">${famPill(r.fam)}</td><td class="num">${r.n}</td><td class="num">${hms(r.sec)}</td><td class="num">${num(r.gpuH,2)}</td><td class="num">${num(r.a100H,2)}</td>`+
+  $("cost-table").innerHTML=`<tr><th>method</th><th>family</th><th class="num">runs</th><th>GPU</th><th class="num">time / run</th><th class="num">GPU-h</th><th class="num">peak GPU mem</th><th class="num">peak CPU mem</th><th class="num">params</th><th class="num">train FLOPs / run</th><th class="num">MFU</th><th class="num">samples / s</th><th class="num">ms / query</th><th class="num">kWh</th><th class="num">kg CO₂e</th><th class="num">€</th><th class="num">€ / run</th><th class="num">quality %</th><th>source</th></tr>`+
+    rows.map(r=>`<tr><td>${esc(r.m)}</td><td style="white-space:nowrap">${famPill(r.fam)}</td><td class="num">${r.n}</td><td style="white-space:nowrap">${r.gpu}</td><td class="num">${hms(r.sec)}</td><td class="num">${num(r.gpuH,2)}</td>`+
       `<td class="num">${mem(r.gmem)}</td><td class="num">${mem(r.cmem)}</td><td class="num">${big(r.params)}</td><td class="num">${r.flops?r.flops.toExponential(2):"–"}</td><td class="num">${r.mfu==null?"–":(100*r.mfu).toFixed(1)+" %"}</td>`+
       `<td class="num">${r.sps==null?"–":Math.round(r.sps)}</td><td class="num">${r.msq==null?"–":num(r.msq,1)}</td><td class="num">${num(r.kwh,2)}</td><td class="num">${num(r.kg,2)}</td><td class="num">${num(r.eur,2)}</td><td class="num">${num(r.eur/r.n,2)}</td>`+
       `<td class="num">${num(r.q,1)}</td><td><span class="pill" style="background:${SRC[r.src]}">${r.src}</span></td></tr>`).join("");

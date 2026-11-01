@@ -10,6 +10,7 @@ folder is also pushed to the hosted dashboard while the run trains (push.py).
 import json
 import math
 import os
+import socket
 import time
 
 import numpy as np
@@ -49,6 +50,16 @@ def _atomic_dump(obj, path):
     os.replace(tmp, path)
 
 
+def _gpu_name(device):
+    """Name of the GPU behind torch device string `device` (dashboard: All runs, Cost & efficiency); None on CPU."""
+    try:
+        import torch
+        dev = torch.device(device)
+        return torch.cuda.get_device_name(dev) if dev.type == "cuda" else None
+    except Exception:                                   # noqa: BLE001
+        return None
+
+
 class LiveRun:
     def __init__(self, root, name, cfg, gi, extra=None):
         self.root, self.name = root, name
@@ -63,9 +74,11 @@ class LiveRun:
                 "feat_dim", "audit_tau", "proxy_tau", "ku_mode", "baseline", "motif_p", "rwse_steps",
                 "wm_p_action", "task_mask_p", "pool_mode", "minimal_pairs", "encoder", "patience", "select_best",
                 "select_metric", "amp")
+        device = resolve_device(cfg.device)
         self.state = {"name": name, "status": "running", "started": time.strftime("%Y-%m-%d %H:%M:%S"),
                       "updated": None, "steps_total": cfg.steps,
-                      "config": {**{k: getattr(cfg, k) for k in keep}, "device": resolve_device(cfg.device)},
+                      "gpu": _gpu_name(device), "job": os.environ.get("SLURM_JOB_ID"), "host": socket.gethostname(),
+                      "config": {**{k: getattr(cfg, k) for k in keep}, "device": device},
                       "index": {k: S[k] for k in ("papers", "kus", "kus_per_paper", "per_type", "splits",
                                                     "paper_edges_cites", "paper_edges_proxy", "fields")},
                       "rel_names": REL_NAMES, "comp_types": COMP_TYPES, "role_rels": ROLE_RELS,
@@ -167,7 +180,8 @@ class LiveRun:
             if old.get(key) is not None:
                 self.state[key] = old[key]
         self.state.setdefault("resumed", []).append({"step": step, "at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                                                     "job": os.environ.get("SLURM_JOB_ID")})
+                                                     "job": os.environ.get("SLURM_JOB_ID"),
+                                                     "gpu": self.state.get("gpu")})
         self._write()
 
     def fail(self, err):

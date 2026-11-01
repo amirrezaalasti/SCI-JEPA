@@ -484,6 +484,7 @@ def train_one(cfg, gi, seed, log=print, live=None, save_dir=None, ckpt_path=None
     epoch_of = lambda st: round((st + 1) * per_step / total_anchors, 4)   # passes over all target KUs
     if live is not None:
         live.state["steps_total"] = n_steps
+        live.state["params_trainable"] = int(sum(p.numel() for p in params))   # All runs, while the run trains
         live.state["schedule"] = sched_info
         live.state["epochs_total"] = round(n_steps * per_step / total_anchors, 3)
         live.state["steps_per_epoch"] = total_anchors / per_step
