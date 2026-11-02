@@ -241,13 +241,20 @@ Makes the stored split once (`sci-jepa split`). Steps: year and domain from meta
 | `comp_type`, `comp_paper` | KU type id and paper id per KU |
 | `paper_comps` | KUs of each paper |
 | `paper_nbrs` | `paper → {paper: link weight}` (citations, proxy links) |
+| `comp_quantitative`, `comp_cites_figure`, `comp_challenged` | KU flags |
 | `paper_field`, `paper_subfield`, `paper_domain`, `paper_year` | metadata per paper |
 | `field_papers`, `subfield_papers` | papers per field / subfield |
 | `train_papers`, `val_papers`, `test_papers` | the split; `gi.papers(split)` |
 | `mp_x`, `mp_comp`, `mp_kind`, `mp_of` | counterfactual edits and their source KU |
 | `role_src`, `role_dst`, `role_rel` | typed role edges |
+| `comp_edges`, `children`, `parents`, `cites_pairs` | KU → `[(KU, relation)]`, claim ↔ evidence / implications, citation pairs |
+| `comp_snippet` | the first `snippet_chars` characters of each KU text (dashboard tables) |
 
 `get_index(cfg)` loads the cached blob for the configuration's fingerprint, or builds and saves it. Full KU texts are kept in a side file (`*.texts.pkl`) for BM25 and the text-based comparison systems.
+
+**Layout for large corpora.** `paper_comps`, `comp_edges`, `children`, `parents`, `paper_nbrs` and `cites_pairs` are CSR arrays (`LOOKUP_KEYS`: where each node's entries start, then the entries in the order the former dicts held them), wrapped in small objects that answer like those dicts (`.get(k, default)`, `d[k]`, `in`). `comp_snippet` is one UTF-8 byte array plus offsets. These arrays, the per-KU and per-edge arrays (`SHARED_KEYS`) and the vectors (`MMAP_KEYS`) are saved as `.npy` files next to the `.pt` and opened memory-mapped, so all processes on a node share one copy. The old dicts cost about 0.4 GB per million KUs in every process, rebuilt by every training rank and slowly copied by forked batch workers. Results are bit-identical (`tests/test_index_scale.py`). An index saved by an earlier version still loads: its lookups are built and saved next to it on first load. `python -m sci_jepa.data.graph_index --mmap <index.pt>` converts the rest.
+
+The build streams to disk (`build_blob(cfg, spill=...)`): vectors are appended to a `.npy` file (`_NpySpill`), snippets and full texts to byte files (`_StrSpill`), and the integer columns are kept in compact arrays. Previously the vectors were held in RAM twice (the chunks plus a concatenated copy, ~300 GB at 100M KUs). `_topic_donors` scores evaluation splits larger than `DONOR_DENSE_MAX` (65,536 papers) in row blocks rather than one n × n matrix. `build_proxy_edges` halves its 1,024-row block only when the block would not fit in free GPU memory. Both keep the old computation wherever it already ran.
 
 ### 6.5 `data/instances.py`
 

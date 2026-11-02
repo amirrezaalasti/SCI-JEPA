@@ -15,12 +15,15 @@ import hashlib
 import os
 import time
 import zlib
+from array import array
 from collections import Counter, defaultdict
 
 import numpy as np
 import torch
 
 from sci_jepa.data import ku_schema as S
+
+SPILL_SUFFIX = ".spill.npy"            # = graph_index.SPILL_SUFFIX: save_index moves these files into place
 
 INDEX_VERSION = 6          # bump when the blob format changes (2: KU text snippets; 6: canonical domains +
                            # domain-balanced corpus; 5: experiment-design
@@ -282,6 +285,101 @@ def keep_record(rec, cfg):
     return True, y
 
 
+# ---------------------------------------------------------------- streaming to disk
+# At large scale KUs the build held the vectors as a list of chunks and then a concatenated copy (2 x 154 GB), plus every KU
+# text and snippet as Python strings. With build_blob(spill=...) they go to files as they are made instead.
+class _NpySpill:
+    """Rows appended straight to a .npy file whose header is written last; finish() maps the finished file."""
+    HEAD = 128                                         # bytes reserved for the header (magic, length, dict, padding)
+
+    def __init__(self, path, dtype):
+        self.path, self.dtype, self.n, self.row = path, np.dtype(dtype), 0, None
+        self.f = open(path, "wb")
+        self.f.write(b"\0" * self.HEAD)
+
+    def append(self, X):
+        X = np.ascontiguousarray(X, dtype=self.dtype)
+        if self.row is None:
+            self.row = X.shape[1:]
+        elif X.shape[1:] != self.row:
+            raise ValueError(f"{self.path}: rows of shape {X.shape[1:]} after {self.row}")
+        self.f.write(X.data)
+        self.n += len(X)
+
+    def finish(self):
+        shape = (self.n, *(self.row or ()))
+        d = "{'descr': %r, 'fortran_order': False, 'shape': %r, }" % (np.lib.format.dtype_to_descr(self.dtype), shape)
+        body = d.ljust(self.HEAD - 11) + "\n"
+        if len(body) != self.HEAD - 10:
+            raise ValueError(f"{self.path}: .npy header longer than {self.HEAD} bytes")
+        self.f.seek(0)
+        self.f.write(b"\x93NUMPY\x01\x00" + len(body).to_bytes(2, "little") + body.encode("latin1"))
+        self.f.close()
+        return np.load(self.path, mmap_mode="r")
+
+
+class _StrSpill:
+    """Strings as UTF-8 bytes + offsets (exact round trip, surrogates included): to a spill file, or in memory
+    (path None). finish() -> (bytes as a uint8 array, offsets int64, n + 1)."""
+
+    def __init__(self, path=None):
+        self.out = _NpySpill(path, np.uint8) if path else bytearray()
+        if path:
+            self.out.row = ()                          # one flat byte array
+        self.off = array("q", [0])
+
+    def append(self, s):
+        b = s.encode("utf-8", "surrogatepass")
+        if isinstance(self.out, bytearray):
+            self.out += b
+        else:
+            self.out.f.write(b); self.out.n += len(b)
+        self.off.append(self.off[-1] + len(b))
+
+    def finish(self):
+        data = np.frombuffer(bytes(self.out), np.uint8) if isinstance(self.out, bytearray) else self.out.finish()
+        return data, np.array(self.off, dtype=np.int64)
+
+
+def strings_to_arrays(strings):
+    """A sequence of str -> (UTF-8 bytes, offsets), the layout of comp_snippet_data / comp_snippet_off."""
+    sp = _StrSpill()
+    for s in strings:
+        sp.append(str(s))
+    return sp.finish()
+
+
+class _SpilledTexts:
+    """The full KU texts of a build, read back one by one from their spill file (get_index pickles them as a list)."""
+
+    def __init__(self, data, off):
+        self.data, self.off = data, off
+
+    def __len__(self):
+        return len(self.off) - 1
+
+    def __iter__(self):
+        for s in range(0, len(self), 1 << 16):
+            o = self.off[s:s + (1 << 16) + 1].tolist()
+            for i in range(len(o) - 1):
+                yield bytes(self.data[o[i]:o[i + 1]]).decode("utf-8", "surrogatepass")
+
+    def remove(self):
+        f = getattr(self.data, "filename", None)
+        if f and os.path.exists(f):
+            os.remove(f)
+
+
+def _maybe_eval(cfg, y, label):
+    """False when the paper is surely in no validation / test split (make_splits). Only those papers' texts are
+    minimal-pair sources (build_minimal_pairs keeps no others), so the build need not hold the rest."""
+    if cfg.split_dir:
+        return label in ("val", "test")
+    if cfg.split_mode == "time":
+        return y is not None and y > cfg.time_T
+    return True                                        # random split: decided after the build
+
+
 # ---------------------------------------------------------------- build
 def _corpus(cfg):
     """The records of the corpus in build order, and its balance report (build_blob, prefill_embeddings)."""
@@ -350,9 +448,10 @@ def prefill_embeddings(cfg, shard, n_shards):
     print(f"[ku_graph] prefill {shard}/{n_shards} done: {n_pap} papers, {done} chunks encoded ({time.time() - t0:.0f}s)")
 
 
-def build_blob(cfg, records=None):
+def build_blob(cfg, records=None, spill=None):
     """records: optional iterable of dicts in the normalized schema (synthetic
-    tests); default streams cfg.parquet_dirs."""
+    tests); default streams cfg.parquet_dirs. spill: path prefix for the files the vectors, snippets and full texts
+    are streamed to while building (get_index); None keeps them in memory. The blob's values are the same either way."""
     from sci_jepa.config import resolve_device
     dev = resolve_device(cfg.device)
     emb = make_embedder(cfg, dev)
@@ -367,8 +466,14 @@ def build_blob(cfg, records=None):
             n_expected = sum(sum(v.values()) for v in balance["selected_by_domain"].values()) or None
     _build_progress(cfg, "building index", done=0, total=n_expected, elapsed_s=0)
 
-    comp_x, comp_type, comp_paper, comp_flags, comp_snip, comp_text = [], [], [], defaultdict(list), [], []
-    role_src, role_dst, role_rel = [], [], []
+    # per-KU values in compact arrays (8 bytes per int instead of ~36 as a list of Python ints), and with spill the
+    # vectors / snippets / texts in files
+    comp_x = _NpySpill(f"{spill}.comp_x{SPILL_SUFFIX}", np.float16) if spill else []
+    comp_snip = _StrSpill(f"{spill}.comp_snippet_data{SPILL_SUFFIX}" if spill else None)
+    comp_text = _StrSpill(f"{spill}.comp_text{SPILL_SUFFIX}") if spill else []
+    comp_type, comp_paper = array("q"), array("q")
+    comp_flags = {k: array("b") for k in ("quantitative", "cites_figure", "challenged")}
+    role_src, role_dst, role_rel = array("q"), array("q"), array("q")
     p_year, p_field, p_sub, p_type, p_key, p_id, p_refs, p_dom = [], [], [], [], [], [], [], []
     p_split = []                              # stored split only: each paper's train / val / test label
     stats, skipped = Counter(), Counter()
@@ -400,7 +505,7 @@ def build_blob(cfg, records=None):
         p_key.append(S.openalex_key(rec.get("openalex_id")))
         p_id.append(str(rec.get("paper_id")))
         p_refs.append(S.referenced(rec))
-        if cfg.ku_mode != "paper":
+        if cfg.ku_mode != "paper" and _maybe_eval(cfg, y, rec.get("_split")):
             mp_src += [(n_comp + k, text) for k, (t, text, _) in enumerate(kus) if t in S.MP_TYPES]
         for t, text, fl in kus:
             buf_txt.append(text)
@@ -426,9 +531,9 @@ def build_blob(cfg, records=None):
     if P == 0:
         raise RuntimeError("no papers selected -- check parquet_dirs / subsets / split_mode")
 
-    comp_type = np.asarray(comp_type, dtype=np.int64)
-    comp_paper = np.asarray(comp_paper, dtype=np.int64)
-    comp_x = np.concatenate(comp_x, 0)
+    comp_type = np.array(comp_type, dtype=np.int64)
+    comp_paper = np.array(comp_paper, dtype=np.int64)
+    comp_x = comp_x.finish() if spill else np.concatenate(comp_x, 0)
 
     # ---- fields --------------------------------------------------------------
     fields = sorted(set(p_field)); subs = sorted(set(p_sub))
@@ -453,7 +558,7 @@ def build_blob(cfg, records=None):
                                cfg.proxy_tau, cfg.proxy_topk, dev)
         if len(pr):
             a, b = ids[pr[:, 0]], ids[pr[:, 1]]
-            role_src += a.tolist(); role_dst += b.tolist(); role_rel += [S.REL_ID["proxy"]] * len(a)
+            role_src.extend(a.tolist()); role_dst.extend(b.tolist()); role_rel.extend([S.REL_ID["proxy"]] * len(a))
             pp_s += comp_paper[a].tolist(); pp_d += comp_paper[b].tolist(); pp_w += [2] * len(a)
         print(f"[ku_graph] proxy '{t}' edges: {len(pr)} (tau={cfg.proxy_tau})")
 
@@ -475,15 +580,16 @@ def build_blob(cfg, records=None):
               f"(context {cfg.embed_max_tokens} tokens)")
     if getattr(emb, "reused", 0):
         print(f"[ku_graph] resumed: {emb.reused} texts loaded from the embedding cache")
+    snip_data, snip_off = comp_snip.finish()           # KU text snippets as UTF-8 bytes + offsets (GraphIndex)
     return {"comp_x": comp_x, "comp_type": comp_type, "comp_paper": comp_paper,
-            "comp_quantitative": np.asarray(comp_flags["quantitative"]),
-            "comp_cites_figure": np.asarray(comp_flags["cites_figure"]),
-            "comp_challenged": np.asarray(comp_flags["challenged"]),
-            "comp_snippet": np.asarray(comp_snip, dtype=object),
-            "comp_text": comp_text,                    # full texts: saved to a side file by get_index
+            "comp_quantitative": np.array(comp_flags["quantitative"], dtype=bool),
+            "comp_cites_figure": np.array(comp_flags["cites_figure"], dtype=bool),
+            "comp_challenged": np.array(comp_flags["challenged"], dtype=bool),
+            "comp_snippet_data": snip_data, "comp_snippet_off": snip_off,
+            "comp_text": _SpilledTexts(*comp_text.finish()) if spill else comp_text,   # full texts: a side file (get_index)
             "pc_ptr": pc_ptr, "pc_idx": order,
-            "role_src": np.asarray(role_src, dtype=np.int64), "role_dst": np.asarray(role_dst, dtype=np.int64),
-            "role_rel": np.asarray(role_rel, dtype=np.int64),
+            "role_src": np.array(role_src, dtype=np.int64), "role_dst": np.array(role_dst, dtype=np.int64),
+            "role_rel": np.array(role_rel, dtype=np.int64),
             "pp_src": np.asarray(pp_s, dtype=np.int64), "pp_dst": np.asarray(pp_d, dtype=np.int64),
             "pp_w": np.asarray(pp_w, dtype=np.int64),
             "paper_field": np.asarray([fid[f] for f in p_field]), "paper_subfield": np.asarray([sid[s] for s in p_sub]),
@@ -516,11 +622,25 @@ def _topic_donors(eval_splits, comp_type, comp_x, pc_ptr, order):
             sel = cs[prob[cs]] if prob[cs].any() else cs
             v = comp_x[sel].astype(np.float32).mean(0) - mu
             V.append(v / (np.linalg.norm(v) + 1e-8))
-        V = np.stack(V); sim = V @ V.T
-        np.fill_diagonal(sim, -np.inf)
+        V = np.stack(V)
+        if len(papers) <= DONOR_DENSE_MAX:             # the full similarity matrix, as always
+            sim = V @ V.T
+            np.fill_diagonal(sim, -np.inf)
+            best = sim.argmax(1)
+        else:                                          # n x n would not fit (250 GB at 250k papers): row blocks,
+            n, best = len(papers), np.empty(len(papers), np.int64)   # same rule (first maximum, never itself)
+            step = max(1, DONOR_BLOCK_BYTES // (4 * n))
+            for s in range(0, n, step):
+                sim = V[s:s + step] @ V.T
+                sim[np.arange(len(sim)), np.arange(s, s + len(sim))] = -np.inf
+                best[s:s + len(sim)] = sim.argmax(1)
         for i, p in enumerate(papers):
-            donor[p] = papers[int(np.argmax(sim[i]))]
+            donor[p] = papers[int(best[i])]
     return donor
+
+
+DONOR_DENSE_MAX = 65536                # papers per evaluation split scored with one n x n matrix (16 GB fp32)
+DONOR_BLOCK_BYTES = 1 << 30            # beyond that: rows per block so that a block of scores is ~1 GB
 
 
 def build_minimal_pairs(emb, src, comp_paper, eval_splits, comp_type, comp_x, pc_ptr, order):
