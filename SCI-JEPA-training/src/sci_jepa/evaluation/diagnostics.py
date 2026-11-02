@@ -282,6 +282,29 @@ def evaluate(model, gi, cfg, dev, shape_bank=None, split="test", seed=1234, abla
     audits = []
     records, inv_lab, inv_pred = [], [], []           # per-query detail for the dashboard
     snip = getattr(gi, "comp_snippet", None)
+    # the bank goes to the device once and each type's normalised same-type bank is built once: the same values and
+    # shapes the per-query code copied from the CPU for every query (~600 MB for evidence at 2M papers), so every rank
+    # and cosine is identical; a batch's per-query values are read back together instead of with syncs per query.
+    # The cached banks take the bank's size again, so the bank and the caches stay on the device only while as much
+    # again is free for the queries, and an out-of-memory error drops both: from then on rows are copied and banks
+    # built per query, as before (same values)
+    def room(nbytes):                                  # free device memory, with the allocator's cached blocks
+        if dev.type != "cuda":
+            return True
+        return torch.cuda.mem_get_info(dev)[0] + torch.cuda.memory_reserved(dev) - torch.cuda.memory_allocated(dev) >= nbytes
+
+    bank_bytes = H_t.numel() * H_t.element_size()
+    H_dev = None
+    if room(2 * bank_bytes):
+        try:
+            H_dev = H_t.to(dev)
+        except torch.cuda.OutOfMemoryError:
+            H_dev = None
+    keep_banks = H_dev is not None and room(2 * bank_bytes)
+
+    def rows(idx):
+        return H_dev[torch.as_tensor(idx, device=dev)] if H_dev is not None else H_t[idx].to(dev)
+    same_of, bank_of = {}, {}
     n_left = cfg.eval_instances
     while n_left > 0:
         insts = [i for i in sampler.sample(min(cfg.batch_size, n_left)) if i["target_comp"] in pos_of]
@@ -291,30 +314,50 @@ def evaluate(model, gi, cfg, dev, shape_bank=None, split="test", seed=1234, abla
         batch = to_device(collate(insts), dev)
         pred, h = model.predict(batch)
         audits += batch["audit"]
+        q_std, q_top1, q_bal, q_cp, pend = [], [], [], [], []
         for b, inst in enumerate(insts):
             t = inst["target_type"]
-            same = np.nonzero(ctype == t)[0]
+            if t not in same_of:
+                same_of[t] = np.nonzero(ctype == t)[0]
+            same = same_of[t]
             gold = pos_of[inst["target_comp"]]
-            # standard: full same-type bank
-            bank = H_t[same].to(dev)
+            # standard: full same-type bank (the scores _ranks computes; its argmax is the top-1 KU)
+            bank_n = bank_of.get(t)
+            if bank_n is None:
+                try:
+                    bank_n = F.normalize(rows(same), dim=-1)
+                except torch.cuda.OutOfMemoryError:    # no room after all: per query from the CPU from now on
+                    bank_of.clear(); H_dev, keep_banks = None, False
+                    torch.cuda.empty_cache()
+                    bank_n = F.normalize(rows(same), dim=-1)
+                if keep_banks:
+                    bank_of[t] = bank_n
             gp = torch.tensor([int(np.nonzero(same == gold)[0][0])], device=dev)
-            std_r.append(_ranks(pred[b:b + 1], bank, gp).item())
-            top1 = int(same[int((F.normalize(pred[b:b + 1], dim=-1) @ F.normalize(bank, dim=-1).T).argmax())])
+            s = F.normalize(pred[b:b + 1], dim=-1) @ bank_n.T
+            q_std.append((s > s.gather(1, gp.view(-1, 1))).sum(1).float() + 1)
+            q_top1.append(s.argmax())
             # balanced: exactly K same-type distractors, chosen WITHOUT the instance's
             # neighbourhood (so pool difficulty does not change with N): same subfield,
             # then proxy / citation neighbours, then same field, then anywhere
             pool = hard_pool(gi, int(inst["papers"][0]), same, bank_paper, cfg.balanced_k, rng, mode=cfg.pool_mode)
             pool_sizes.append(len(pool))
             pool = [gold] + pool
-            bal_r.append(_ranks(pred[b:b + 1], H_t[pool].to(dev),
-                                torch.tensor([0], device=dev)).item())
-            cp = centred_cos(pred[b:b + 1], H_t[pool].to(dev), mu)
-            sims.append(float(cp[0])); sim_types.append(COMP_TYPES[t]); top1s.append(bal_r[-1] == 1)
-            dis.append(float(cp[1:].max()) if len(pool) > 1 else float("nan"))
+            keys = rows(pool)
+            q_bal.append(_ranks(pred[b:b + 1], keys, torch.tensor([0], device=dev)))
+            cp = centred_cos(pred[b:b + 1], keys, mu)
+            q_cp.append(torch.stack([cp[0], cp[1:].max() if len(pool) > 1 else cp[0]]))
+            pend.append((inst, t, same, len(pool)))
+        std_v, bal_v = torch.cat(q_std).tolist(), torch.cat(q_bal).tolist()
+        top_v, cp_v = torch.stack(q_top1).tolist(), torch.stack(q_cp).tolist()
+        for k, (inst, t, same, n_pool) in enumerate(pend):
+            std_r.append(std_v[k]); bal_r.append(bal_v[k])
+            top1 = int(same[top_v[k]])
+            sims.append(cp_v[k][0]); sim_types.append(COMP_TYPES[t]); top1s.append(bal_r[-1] == 1)
+            dis.append(cp_v[k][1] if n_pool > 1 else float("nan"))
             p0 = int(inst["papers"][0]); a = inst["audit"]
             records.append({
                 "type": COMP_TYPES[t], "rank_std": std_r[-1], "rank_bal": bal_r[-1], "sim": round(sims[-1], 4),
-                "pool": len(pool), "bank": int(len(same)),
+                "pool": n_pool, "bank": int(len(same)),
                 "field": str(gi.field_names[gi.paper_field[p0]]), "year": int(gi.paper_year[p0]),
                 "paper": str(gi.paper_ids[p0]), "n_papers": int(a["n_papers"]),
                 "max_ctx_sim": round(float(a["max_ctx_sim"]), 4), "flagged": bool(a["flagged"]),

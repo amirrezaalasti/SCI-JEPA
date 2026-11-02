@@ -79,6 +79,39 @@ def test_checkpoint_keyed_with_a_now_ignored_setting_still_resumes(tmp_path):
     assert T._load_ckpt(path, key, lambda *_: None) is None
 
 
+def test_resume_file_round_trips_every_array_kind(tmp_path):
+    """_save_ckpt writes arrays as raw bytes outside pickle: every dtype, shape and sharing must come back exactly."""
+    import random
+
+    import torch
+    shared = torch.randn(3, 4)
+    payload = {"model": {"w": torch.randn(5, 7), "bf": torch.randn(4, 3).bfloat16(), "half": torch.randn(2).half(),
+                         "i": torch.arange(6).reshape(2, 3), "mask": torch.tensor([True, False]),
+                         "step": torch.tensor(17.0), "empty": torch.zeros(0, 4),
+                         "strided": torch.randn(4, 6)[:, ::2]},                    # non-contiguous
+               "a": shared, "b": shared,
+               "rng": {"numpy": np.random.get_state(), "python": random.getstate(), "torch": torch.get_rng_state()},
+               "sampler": {"queue": np.arange(10, dtype=np.int64)[::-1], "scalar": np.array(2.5),
+                           "none": np.zeros((0,), np.float32), "obj": np.array(["x", None], dtype=object)},
+               "history": [{"jepa": 0.5}], "version": T.CKPT_VERSION}
+    path = str(tmp_path / "ck.pt")
+    T._save_ckpt(path, payload)
+    back = T._read_ckpt(path)
+    for k, v in payload["model"].items():
+        assert back["model"][k].dtype == v.dtype and torch.equal(back["model"][k], v), k
+    assert back["a"] is back["b"] and torch.equal(back["a"], shared)
+    assert torch.equal(back["rng"]["torch"], payload["rng"]["torch"]) and back["rng"]["python"] == payload["rng"]["python"]
+    for x, y in zip(back["rng"]["numpy"], payload["rng"]["numpy"]):
+        assert np.array_equal(x, y) if isinstance(y, np.ndarray) else x == y
+    for k, v in payload["sampler"].items():
+        assert back["sampler"][k].dtype == v.dtype and back["sampler"][k].shape == v.shape
+        assert np.array_equal(back["sampler"][k], v), k
+    assert back["history"] == payload["history"]
+    with open(path, "r+b") as f:                                          # a write cut short: unreadable, not wrong
+        f.truncate(os.path.getsize(path) - 8)
+    assert T._load_ckpt(path, {}, lambda *_: None) is None
+
+
 @pytest.mark.slow
 def test_kept_weights_load_into_the_model(tmp_path):
     from safetensors import safe_open

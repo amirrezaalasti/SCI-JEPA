@@ -18,9 +18,12 @@ mean / std per metric and paired t-tests against the reference arm.
 """
 import argparse
 import ast
+import io
 import json
 import math
 import os
+import pickle
+import threading
 import time
 
 import numpy as np
@@ -389,12 +392,125 @@ def _set_rng_states(s):
         torch.cuda.set_rng_state_all(s["cuda"])
 
 
+class _Writer:
+    """One background thread for checkpoint files: the training loop hands over a payload already copied to the CPU
+    and goes on training while the file is written (a 2.5 GB checkpoint to NFS took the training thread ~10-20 s;
+    both writers keep the GIL free during the write: safetensors, and _save_ckpt's raw array bytes).
+    At most one write is in flight (the next waits for it); join() waits for the last and re-raises its error."""
+
+    def __init__(self):
+        self.thread, self.err = None, None
+
+    def submit(self, fn, *args):
+        self.join()
+
+        def run():
+            try:
+                fn(*args)
+            except BaseException as e:                 # noqa: BLE001  (raised again in join, on the training thread)
+                self.err = e
+        self.thread = threading.Thread(target=run, name="ckpt-writer")
+        self.thread.start()
+
+    def join(self):
+        if self.thread is not None:
+            self.thread.join()
+            self.thread = None
+        if self.err is not None:
+            e, self.err = self.err, None
+            raise e
+
+
+_WRITER = _Writer()
+
+
+def _cpu_copy(x):
+    """x with every tensor copied to the CPU (a copy for CPU tensors too): training changes the originals while the
+    background thread writes, so the file holds exactly the state of the step it was taken at."""
+    if torch.is_tensor(x):
+        return x.detach().to("cpu", copy=True)
+    if isinstance(x, dict):
+        return {k: _cpu_copy(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return type(x)(_cpu_copy(v) for v in x)
+    return x
+
+
+_CKPT_MAGIC = b"SJCKPT01"         # resume file: magic, 8-byte length of the pickle, the pickle, raw array bytes
+
+
 def _save_ckpt(path, payload):
-    """Atomic: a job killed while writing leaves the previous checkpoint intact."""
+    """Atomic: a job killed while writing leaves the previous checkpoint intact.
+    Runs on the background thread (_WRITER). torch.save holds the GIL for most of a write (the training thread ran
+    at ~20% of its speed during a 1 GiB write to NFS), so every tensor and numeric numpy array is written as raw
+    bytes with plain file writes, which release it; only the small rest is pickled, with each array replaced by
+    its place in the file. _read_ckpt reads this format and files written by torch.save before it."""
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    data, pids, off = [], {}, 0
+
+    class _P(pickle.Pickler):
+        def persistent_id(self, obj):
+            nonlocal off
+            if torch.is_tensor(obj):
+                raw = obj.detach().cpu().contiguous().reshape(-1).view(torch.uint8).numpy()
+                meta = ("t", str(obj.dtype).split(".")[-1], tuple(obj.shape))
+            elif isinstance(obj, np.ndarray) and obj.dtype.kind in "biufc":
+                raw = np.ascontiguousarray(obj).reshape(-1).view(np.uint8)
+                meta = ("n", obj.dtype.str, obj.shape)
+            else:
+                return None
+            if id(obj) not in pids:                     # an array referenced twice is stored (and loaded) once
+                pids[id(obj)] = (meta[0], len(data), off, raw.nbytes, *meta[1:])
+                data.append((obj, raw)); off += raw.nbytes
+            return pids[id(obj)]
+
+    buf = io.BytesIO()
+    _P(buf, protocol=pickle.HIGHEST_PROTOCOL).dump(payload)
+    head = buf.getvalue()
     tmp = path + ".tmp"
-    torch.save(payload, tmp)
+    with open(tmp, "wb") as f:
+        f.write(_CKPT_MAGIC + len(head).to_bytes(8, "little"))
+        f.write(head)
+        for _, raw in data:
+            f.write(raw)
     os.replace(tmp, path)
+
+
+def _read_ckpt(path):
+    """A resume file written by _save_ckpt, or by torch.save (older checkpoints)."""
+    with open(path, "rb", buffering=0) as f:           # unbuffered: the arrays are read straight into place
+        if f.read(len(_CKPT_MAGIC)) != _CKPT_MAGIC:
+            return torch.load(path, map_location="cpu", weights_only=False)
+        n = int.from_bytes(f.read(8), "little")
+        head = bytearray(n)
+        if f.readinto(head) != n:
+            raise EOFError(f"{path} is truncated")
+        base, got = f.tell(), {}
+
+        def fill(dst):                                  # a raw read may return less than asked: read until full
+            view, done = memoryview(dst).cast("B"), 0
+            while done < len(view):
+                k = f.readinto(view[done:])
+                if not k:
+                    raise EOFError(f"{path} is truncated")
+                done += k
+
+        class _U(pickle.Unpickler):
+            def persistent_load(self, pid):
+                kind, k, at, nbytes, dtype, shape = pid
+                if k not in got:
+                    f.seek(base + at)
+                    if kind == "t":
+                        raw = torch.empty(nbytes, dtype=torch.uint8)
+                        dst = raw.numpy()
+                    else:
+                        arr = np.empty(shape, dtype=np.dtype(dtype))
+                        dst = arr.reshape(-1).view(np.uint8)
+                    fill(dst)
+                    got[k] =raw.view(getattr(torch, dtype)).reshape(shape) if kind == "t" else arr
+                return got[k]
+
+        return _U(io.BytesIO(head)).load()
 
 
 def keep_steps(n_steps, k):
@@ -413,8 +529,12 @@ def _keep_weights(model, cfg, save_dir, step, n_steps, epoch, sec, loss):
     path = os.path.join(d, f"step{step + 1:07d}.safetensors")
     meta = {"step": str(step + 1), "n_steps": str(n_steps), "epoch": str(epoch), "train_sec": f"{sec:.0f}",
             "train_jepa": "" if loss is None else f"{loss:.6g}", "saved": time.strftime("%Y-%m-%d %H:%M:%S")}
-    save_file({k: v.detach().cpu().contiguous() for k, v in model.state_dict().items()}, path + ".tmp", metadata=meta)
-    os.replace(path + ".tmp", path)
+    state = {k: v.detach().to("cpu", copy=True).contiguous() for k, v in model.state_dict().items()}
+
+    def write():                                       # in the background (_WRITER), like the resume checkpoints
+        save_file(state, path + ".tmp", metadata=meta)
+        os.replace(path + ".tmp", path)
+    _WRITER.submit(write)
     return path
 
 
@@ -422,7 +542,7 @@ def _load_ckpt(path, key, log):
     if not path or not os.path.exists(path):
         return None
     try:
-        ck = torch.load(path, map_location="cpu", weights_only=False)
+        ck = _read_ckpt(path)
     except Exception as e:                              # noqa: BLE001  (a damaged file: start over)
         log(f"  [resume] cannot read {path} ({e}): starting this run from the beginning")
         return None
@@ -445,6 +565,13 @@ def train_one(cfg, gi, seed, log=print, live=None, save_dir=None, ckpt_path=None
     deletes it when the result is saved. None = no checkpoints (the original behaviour).
     cfg.keep_ckpts (with save_dir): the weights at that many evenly spaced steps are kept in save_dir/checkpoints/
     (keep_steps); a resumed run writes the ones still ahead of it."""
+    try:
+        return _train_one(cfg, gi, seed, log, live, save_dir, ckpt_path)
+    finally:                                           # the last checkpoint is on disk before the caller goes on
+        _WRITER.join()
+
+
+def _train_one(cfg, gi, seed, log, live, save_dir, ckpt_path):
     set_seed(seed)
     dev = torch.device(resolve_device(cfg.device))
     if cfg.minimal_pairs and cfg.mp_filter:            # adversarially filtered counterfactuals (validity.py)
@@ -576,13 +703,15 @@ def train_one(cfg, gi, seed, log=print, live=None, save_dir=None, ckpt_path=None
                                                           if step >= 0 else ""))
 
     def checkpoint(at, sampler_state, done):
-        _save_ckpt(ckpt_path, {
+        # everything training goes on changing is copied here, on the training thread; the file is written in the
+        # background (_WRITER). The sampler state and best_state are snapshots already (replaced, never changed).
+        _WRITER.submit(_save_ckpt, ckpt_path, {
             "version": CKPT_VERSION, "key": key, "step": at, "done": done,
-            "model": {k: v.detach().cpu() for k, v in model.state_dict().items()},
-            "opt": opt.state_dict(), "sched": sched.state_dict(),
-            "scaler": scaler.state_dict() if scaler is not None else None,
+            "model": _cpu_copy(model.state_dict()),
+            "opt": _cpu_copy(opt.state_dict()), "sched": _cpu_copy(sched.state_dict()),
+            "scaler": _cpu_copy(scaler.state_dict()) if scaler is not None else None,
             "gen": gen.get_state(), "rng": _rng_states(), "sampler": sampler_state,
-            "history": history, "epoch_results": epoch_results, "best_state": best_state,
+            "history": list(history), "epoch_results": list(epoch_results), "best_state": best_state,
             "ep_sum": float(ep_sum), "ep_n": ep_n, "phase": phase, "stopped_epoch": stopped_epoch,
             "elapsed": time.time() - t0, "saved": time.strftime("%Y-%m-%d %H:%M:%S"),
             "job": os.environ.get("SLURM_JOB_ID")})
