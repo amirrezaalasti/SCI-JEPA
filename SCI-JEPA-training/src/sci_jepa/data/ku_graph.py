@@ -448,6 +448,68 @@ def prefill_embeddings(cfg, shard, n_shards):
     print(f"[ku_graph] prefill {shard}/{n_shards} done: {n_pap} papers, {done} chunks encoded ({time.time() - t0:.0f}s)")
 
 
+def prefill_context_texts(cfg, shard, n_shards, start=0):
+    """prefill_embeddings for ku_mode="paper_masked": encode the context texts that build_context_texts encodes
+    (24.8M at 2.07M papers, one 8,192-text chunk every ~2.5 min on an L40S) into the build's embedding cache, so
+    other GPUs help a running build. Takes every n_shards-th chunk (from shard) at index >= start, skipping chunks
+    already cached; the build, which encodes chunks in order, then loads them instead of encoding them.
+    Pick start ahead of the build's current chunk so the two meet near the end.
+    Texts are generated paper by paper as the build does (same corpus order, _context_texts, the same per-paper
+    de-duplication), so chunk k holds the same texts and hash as the build's chunk k. Check: every chunk before
+    start that the build already encoded must be in the cache under that hash; if none is, the texts differ and
+    the prefill stops. (The counterfactual texts, ~72 chunks, are left to the build: they need the splits.)"""
+    from sci_jepa.config import resolve_device
+    if cfg.ku_mode != "paper_masked":
+        raise SystemExit("prefill_context_texts: only for ku_mode=paper_masked")
+    emb = ResumableEmbedder(make_embedder(cfg, resolve_device(cfg.device)), embed_cache_dir(cfg))
+    print(f"[ku_graph] text prefill {shard}/{n_shards} from chunk {start} -> {emb.root}", flush=True)
+    names = S.active_templates(cfg.pm_templates)
+    records, _ = _corpus(cfg)
+    st = {"k": 0, "cached_before": 0, "missing_before": 0, "done": 0, "skipped": 0}
+    buf, n_pap, t0 = [], 0, time.time()
+
+    def chunk(part):
+        k = st["k"]; st["k"] += 1
+        f = emb._file(part)
+        if k < start:                                   # the build's part: only checked
+            st["cached_before" if os.path.exists(f) else "missing_before"] += 1
+            if k == start - 1 or (k + 1) % 100 == 0:
+                print(f"[ku_graph] text prefill {shard}/{n_shards}: chunks 0-{k}: {st['cached_before']} found in "
+                      f"the cache, {st['missing_before']} not ({time.time() - t0:.0f}s)", flush=True)
+            if k == start - 1 and st["cached_before"] == 0:
+                raise SystemExit("text prefill: none of the build's chunks are in the cache under these settings; "
+                                 "the texts or settings differ from the build's, nothing encoded")
+            return
+        if (k - start) % n_shards != shard:
+            return
+        if os.path.exists(f):
+            st["skipped"] += 1
+            return
+        emb._encode_part(part, f); st["done"] += 1
+        if st["done"] % 10 == 0:
+            print(f"[ku_graph] text prefill {shard}/{n_shards}: chunk {k}, {st['done']} encoded, {st['skipped']} "
+                  f"already cached ({time.time() - t0:.0f}s)", flush=True)
+
+    for rec in records:
+        got, _, _ = _paper_kus(rec, cfg)
+        if got is None:
+            continue
+        n_pap += 1
+        kus, edges, _ = got
+        seen = set()                                    # the build de-duplicates (paper, text)
+        for _, txt in _context_texts(kus, edges, names):
+            if txt not in seen:
+                seen.add(txt); buf.append(txt)
+        while len(buf) >= emb.chunk:
+            chunk(buf[:emb.chunk]); buf = buf[emb.chunk:]
+        if cfg.max_papers and not cfg.split_dir and n_pap >= cfg.max_papers:
+            break
+    if buf:
+        chunk(buf)
+    print(f"[ku_graph] text prefill {shard}/{n_shards} done: {n_pap} papers, {st['k']} chunks, {st['done']} "
+          f"encoded, {st['skipped']} already cached ({time.time() - t0:.0f}s)", flush=True)
+
+
 def build_blob(cfg, records=None, spill=None):
     """records: optional iterable of dicts in the normalized schema (synthetic
     tests); default streams cfg.parquet_dirs. spill: path prefix for the files the vectors, snippets and full texts
@@ -673,6 +735,37 @@ def build_minimal_pairs(emb, src, comp_paper, eval_splits, comp_type, comp_x, pc
             "mp_snippet": np.asarray([t[:240] for t in texts], dtype=object), "mp_text": texts}
 
 
+def _context_texts(kus, edges, names):
+    """One paper's (template name, context text) pairs in build order: the templates that have something of their
+    target type to predict and give a non-empty text (build_context_texts, prefill_context_texts)."""
+    out = []
+    for name in names:
+        given, targets = S.TEMPLATES[name]
+        if not any(t == k for k, _, _ in kus for t in targets):
+            continue                                       # nothing of the target type to predict
+        txt = S.compose_text(kus, edges, given)
+        if txt:
+            out.append((name, txt))
+    return out
+
+
+def _encode_reporting(cfg, emb, texts, task):
+    """emb.encode(texts), one cache chunk at a time with the build's progress written after each chunk, so the
+    dashboard's "KU index build" row moves during a long encoding (paper_masked: ~3,100 chunks at 2.07M papers).
+    Chunk boundaries are those of one emb.encode(texts) call, so cached chunks are found the same way."""
+    if not isinstance(emb, ResumableEmbedder) or len(texts) <= emb.chunk:
+        return np.asarray(emb.encode(texts), dtype=np.float16)
+    out, n, t0, reused0 = [], len(texts), time.time(), emb.reused
+    for s in range(0, n, emb.chunk):
+        out.append(np.asarray(emb.encode(texts[s:s + emb.chunk]), dtype=np.float16))
+        done, el = min(s + emb.chunk, n), time.time() - t0
+        new = done - (emb.reused - reused0)                # texts encoded here, not loaded from the cache
+        _build_progress(cfg, "building index", task=task, done=done, total=n, elapsed_s=round(el),
+                        queries_per_s=round(new / max(el, 1e-9), 1),
+                        eta_max_s=round((n - done) * el / new) if new else None)
+    return np.concatenate(out)
+
+
 def build_context_texts(cfg, emb, parts, p_field, p_sub, splits):
     """ku_mode="paper_masked": for every paper and template, the given KUs joined into ONE
     text and encoded together (ctx_*). For val / test papers also counterfactual forward texts
@@ -682,13 +775,7 @@ def build_context_texts(cfg, emb, parts, p_field, p_sub, splits):
     names = S.active_templates(cfg.pm_templates)
     texts, c_paper, c_tpl, seen = [], [], [], {}
     for p, (kus, edges) in enumerate(parts):
-        for name in names:
-            given, targets = S.TEMPLATES[name]
-            if not any(t == k for k, _, _ in kus for t in targets):
-                continue                                   # nothing of the target type to predict
-            txt = S.compose_text(kus, edges, given)
-            if not txt:
-                continue
+        for name, txt in _context_texts(kus, edges, names):
             key = (p, txt)
             if key not in seen:                            # identical texts share one row
                 seen[key] = len(texts); texts.append(txt)
@@ -718,8 +805,9 @@ def build_context_texts(cfg, emb, parts, p_field, p_sub, splits):
                     cf_paper.append(p); cf_kind.append(kind); cf_donor.append(int(d))
     print(f"[ku_graph] paper_masked: {len(texts)} context texts ({len(names)} templates) + "
           f"{len(cf_txt)} counterfactual texts to encode", flush=True)
-    X = np.asarray(emb.encode(texts), dtype=np.float16) if texts else np.zeros((0, 1), np.float16)
-    CF = np.asarray(emb.encode(cf_txt), dtype=np.float16) if cf_txt else np.zeros((0, X.shape[1]), np.float16)
+    X = _encode_reporting(cfg, emb, texts, "encoding paper texts") if texts else np.zeros((0, 1), np.float16)
+    CF = (_encode_reporting(cfg, emb, cf_txt, "encoding counterfactual paper texts") if cf_txt
+          else np.zeros((0, X.shape[1]), np.float16))
     print(f"[ku_graph] paper_masked texts encoded in {time.time() - t0:.0f}s")
     return {"ctx_x": X, "ctx_row": np.asarray(rows, dtype=np.int64), "ctx_paper": np.asarray(c_paper, dtype=np.int64),
             "ctx_tpl": np.asarray(c_tpl, dtype=np.int64), "template_names": S.TEMPLATE_NAMES,
@@ -777,8 +865,15 @@ if __name__ == "__main__":
     ap.add_argument("--set", nargs="*", default=[])
     ap.add_argument("--prefill", default="", help="i/n: only encode every n-th text chunk into the embedding cache "
                     "(from i) and exit; run several on other GPUs while one build runs (prefill_embeddings)")
+    ap.add_argument("--prefill-texts", default="", help="i/n: the same for the paper_masked context texts "
+                    "(prefill_context_texts); with --from K only chunks >= K")
+    ap.add_argument("--from", dest="start", type=int, default=0)
     args = ap.parse_args()
     cfg = PaperAConfig().override(**parse_overrides(args.set))
+    if args.prefill_texts:
+        i, n = (int(x) for x in args.prefill_texts.split("/"))
+        prefill_context_texts(cfg, i, n, args.start)
+        raise SystemExit(0)
     if args.prefill:
         i, n = (int(x) for x in args.prefill.split("/"))
         prefill_embeddings(cfg, i, n)

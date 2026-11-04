@@ -370,7 +370,8 @@ def _fp32(out):
 CKPT_VERSION = 1
 _CKPT_IGNORE = ("out_dir", "model_dir", "index_dir", "device", "resume_runs", "ckpt_every", "keep_ckpts", "llm_models",
                 "batch_workers", "tf32", "fused_adamw", "trainer", "devices",   # speed settings: a run may resume with other values
-                "arms")                                         # which arms a job may claim, not how this arm trains
+                "arms", "seeds")                                # which arm x seed runs a job may claim, not how this
+                                                                # run trains (its own seed is the key's "seed")
 
 
 def _ckpt_key(cfg, seed):

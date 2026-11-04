@@ -57,7 +57,8 @@ def wanted(rel):
     parts = rel.split("/")
     if rel in SKIP_TOP or SKIP_DIRS.intersection(parts[:-1]) or rel.endswith(".tmp") or ".tmp" in parts[-1]:
         return False
-    return rel.endswith(".json") or (parts[0] == "graphs" and rel.endswith(".html"))
+    return (rel.endswith(".json") or (parts[0] == "graphs" and rel.endswith(".html"))
+            or (parts[0] == "governance" and len(parts) == 2))   # documents linked from the Regulation tab
 
 
 def walk(root):

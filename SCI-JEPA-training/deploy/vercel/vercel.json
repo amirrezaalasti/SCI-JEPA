@@ -5,6 +5,7 @@
     { "source": "/graphs/:file((?!vendor/).*)", "destination": "/api/f?p=graphs/:file" },
     { "source": "/infra/:path*", "destination": "/api/f?p=infra/:path*" },
     { "source": "/cluster/:path*", "destination": "/api/f?p=cluster/:path*" },
+    { "source": "/governance/:file", "destination": "/api/f?p=governance/:file" },
     { "source": "/:file([A-Za-z0-9_.-]+\\.json)", "destination": "/api/f?p=:file" }
   ],
   "headers": [

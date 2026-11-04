@@ -35,7 +35,12 @@ export const TYPES: Record<string, string> = {
   html: "text/html; charset=utf-8",
   csv: "text/csv; charset=utf-8",
   txt: "text/plain; charset=utf-8",
+  md: "text/plain; charset=utf-8",
   svg: "image/svg+xml",
   png: "image/png",
 };
-export const typeOf = (p: string) => TYPES[p.split(".").pop() || ""] || "application/octet-stream";
+// files without an extension (governance/NOTICE) are text
+export const typeOf = (p: string) => {
+  const name = p.split("/").pop() || "";
+  return TYPES[name.includes(".") ? name.split(".").pop() || "" : "txt"] || "application/octet-stream";
+};
