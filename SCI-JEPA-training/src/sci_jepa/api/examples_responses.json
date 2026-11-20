@@ -1,0 +1,1642 @@
+{
+ "health": {
+  "default": {
+   "status": "ok"
+  }
+ },
+ "ready": {
+  "default": {
+   "status": "ready",
+   "model_loaded": true,
+   "index_loaded": true,
+   "search_loaded": true,
+   "queue": {
+    "waiting": 0,
+    "max": 16,
+    "busy": false
+   },
+   "gpu": {
+    "name": "NVIDIA GeForce RTX 2080 Ti",
+    "allocated_bytes": 1249203200,
+    "reserved_bytes": 1388314624,
+    "free_bytes": 9753919488,
+    "total_bytes": 11347623936
+   }
+  }
+ },
+ "info": {
+  "default": {
+   "name": "Sci-JEPA",
+   "version": "1.0.0",
+   "model": {
+    "id": "sci-jepa-1.0.0",
+    "checkpoint": 1,
+    "weights": "best",
+    "sha256": "43375a5b7a4e8d61",
+    "data_version": "paper_a_ku_index_b40bd0e47bd9"
+   },
+   "checkpoint": {
+    "weights": "best",
+    "best_epoch": 1,
+    "sha256": "43375a5b7a4e8d6126e6a2890aae6300c4c5ecc15a509e8fd4fd3e3a398ad233"
+   },
+   "architecture": {
+    "encoder": "rgat",
+    "text_encoder": "Alibaba-NLP/gte-modernbert-base",
+    "feat_dim": 768,
+    "context_papers": 8
+   },
+   "test_metrics": {
+    "balanced_MRR": 0.9917629361152649,
+    "chance": 0.051458203046917145,
+    "tasks": {
+     "forward": {
+      "MRR": 0.6820500927643784,
+      "chance": 0.050887440016415715,
+      "ratio": 13.403112684472962,
+      "Hits@1": 0.40476190476190477,
+      "Hits@10": 0.9965986394557823,
+      "n": 294,
+      "acc_sim": 0.5714285714285714,
+      "sim_mean": 0.8067149876737271,
+      "acc_sim_top1": 0.25170068027210885,
+      "false_accept": 0.017006802721088437,
+      "mp_pair": 0.5084745762711864,
+      "mp_all": 0.4054982817869416,
+      "mp_n": 291,
+      "label": "Forward prediction",
+      "query": "mask Result | given Problem, Method, Material/Condition",
+      "macro_ratio": 13.154046123071666
+     },
+     "inverse": {
+      "MRR": 0.6461148648648649,
+      "chance": 0.05057985967371733,
+      "ratio": 12.774152973789363,
+      "Hits@1": 0.3581081081081081,
+      "Hits@10": 1.0,
+      "n": 296,
+      "acc_sim": 0.8581081081081081,
+      "sim_mean": 0.8439136636821,
+      "acc_sim_top1": 0.30743243243243246,
+      "false_accept": 0.04054054054054054,
+      "mp_pair": 0.613044316564995,
+      "mp_all": 0.3614864864864865,
+      "mp_n": 296,
+      "label": "Experiment design (inverse)",
+      "query": "mask Method / Material | given Problem, Result",
+      "macro_ratio": 12.694006775068738
+     },
+     "abduction": {
+      "MRR": 0.8558182532462629,
+      "chance": 0.051384632025324097,
+      "ratio": 16.655140253305436,
+      "Hits@1": 0.8061224489795918,
+      "Hits@10": 0.9285714285714286,
+      "n": 294,
+      "acc_sim": 0.4421768707482993,
+      "sim_mean": 0.7456821216409709,
+      "acc_sim_top1": 0.4387755102040816,
+      "false_accept": 0.006802721088435374,
+      "mp_pair": 0.4716981132075472,
+      "mp_all": 0.45098039215686275,
+      "mp_n": 51,
+      "label": "Abduction",
+      "query": "mask Claim / Hypothesis | given Results, Conditions",
+      "macro_ratio": 16.01940803251406
+     },
+     "consistency": {
+      "bal_acc": 0.8621023713128977,
+      "acc": 0.9247733043162858,
+      "chance": 0.5,
+      "n": 13785,
+      "n_supports": 10080,
+      "n_contradicts": 3705,
+      "recall_supports": 0.9976190476190476,
+      "recall_contradicts": 0.7265856950067476,
+      "inter_paper": "not available: the data has no supports / contradicts edges BETWEEN papers (papers are linked only by citations, field and proxy edges)",
+      "label": "Consistency checking",
+      "query": "hide supports / contradicts edges (claim-evidence) | classify them",
+      "macro_bal_acc": 0.8470010859824072
+     },
+     "intervention": {
+      "note": "input intervention (the model has no z_do conditioning yet)",
+      "label": "Intervention conditioning",
+      "query": "forward query with change(Condition := c') / change(Method := m')"
+     },
+     "macro": {
+      "forward": 13.154046123071666,
+      "inverse": 12.694006775068738,
+      "abduction": 16.01940803251406,
+      "consistency": 0.8470010859824072,
+      "toward": 1.0,
+      "index": 9.112292620523855,
+      "min_queries": 20
+     }
+    }
+   },
+   "training_data": {
+    "source": "Scientific-Summaries (LAION, CC-BY-4.0)"
+   },
+   "corpus": {
+    "papers": 2066075,
+    "knowledge_units": 44653582,
+    "years": "1901 to 2026",
+    "fields": {
+     "Physics": 830052,
+     "Astrophysics": 271305,
+     "Mathematics": 412593,
+     "Computer Science": 390964,
+     "Statistics": 33261,
+     "EESS & Engineering": 57849,
+     "Quantitative Biology & Medicine": 35676,
+     "Economics & Finance": 18581,
+     "Chemistry": 4471,
+     "Other": 11323
+    },
+    "splits": {
+     "train": 1966075,
+     "val": 50000,
+     "test": 50000
+    },
+    "full_texts": false
+   },
+   "language": [
+    "en"
+   ],
+   "tasks": [
+    "forward",
+    "inverse",
+    "abduction",
+    "consistency",
+    "edit_check",
+    "intervention"
+   ],
+   "limitations": [
+    "Ranks published findings by fit; it does not check facts.",
+    "Scores are relative within one request, not probabilities of truth.",
+    "English only; trained on English papers, so other languages are not supported.",
+    "The text splitter of /v1/ask and /v1/parse is a cue-word placeholder; check `understood`.",
+    "BM25 is computed over the shortlisted papers, not the whole corpus."
+   ],
+   "attribution": "Knowledge units from Scientific-Summaries (LAION, CC-BY-4.0); original papers on arXiv."
+  }
+ },
+ "models": {
+  "default": {
+   "models": [
+    {
+     "id": "sci-jepa-1.0.0",
+     "default": true,
+     "weights": "best",
+     "sha256": "43375a5b7a4e8d61"
+    }
+   ]
+  }
+ },
+ "tasks": {
+  "default": {
+   "tasks": {
+    "forward": {
+     "question": "What results can you expect?",
+     "requires": [
+      "problem",
+      "method",
+      "conditions"
+     ]
+    },
+    "inverse": {
+     "question": "Which method could lead to this result?",
+     "requires": [
+      "problem",
+      "result"
+     ]
+    },
+    "abduction": {
+     "question": "What could explain these results?",
+     "requires": [
+      "result",
+      "conditions"
+     ]
+    },
+    "consistency": {
+     "question": "Is this claim supported by the evidence?",
+     "requires": [
+      "claim",
+      "evidence"
+     ]
+    },
+    "edit_check": {
+     "question": "Does the model tell a finding from an edited copy?",
+     "requires": [
+      "original",
+      "edited"
+     ]
+    },
+    "intervention": {
+     "question": "How would the result change with another method or setup?",
+     "requires": [
+      "problem",
+      "method",
+      "conditions",
+      "change"
+     ]
+    }
+   },
+   "parts": {
+    "problem": {
+     "ku_types": [
+      "context",
+      "question"
+     ],
+     "min_words": 6,
+     "max_chars": 1500
+    },
+    "method": {
+     "ku_types": [
+      "method"
+     ],
+     "min_words": 5,
+     "max_chars": 1500
+    },
+    "conditions": {
+     "ku_types": [
+      "procedure"
+     ],
+     "min_words": 5,
+     "max_chars": 1500
+    },
+    "result": {
+     "ku_types": [
+      "result"
+     ],
+     "min_words": 6,
+     "max_chars": 1500
+    },
+    "claim": {
+     "ku_types": [
+      "claim"
+     ],
+     "min_words": 6,
+     "max_chars": 1000
+    },
+    "evidence": {
+     "ku_types": [
+      "evidence"
+     ],
+     "min_words": 8,
+     "max_chars": 1500
+    }
+   }
+  }
+ },
+ "ask": {
+  "complete": {
+   "status": "ok",
+   "session": "ses_ZOWhvzrN4VmYPWbb",
+   "expires_at": "2026-11-21T15:21:40Z",
+   "task": "forward",
+   "understood": [
+    {
+     "part": "problem",
+     "text": "We want to predict reaction yields from written lab protocols.",
+     "confidence": 0.83
+    },
+    {
+     "part": "method",
+     "text": "We fine-tune a small language model on the protocol text.",
+     "confidence": 1.0
+    },
+    {
+     "part": "conditions",
+     "text": "We use about 50,000 Suzuki coupling protocols from US patents with an 80/20 split.",
+     "confidence": 0.9
+    }
+   ],
+   "answers": [
+    {
+     "rank": 1,
+     "text": "ChemLLM achieves a Top-5 accuracy of 92.3% on the ChemBench dataset, surpassing GPT-3.5 by 8.7% absolute improvement. On the USPTO-MIT dataset, ChemLLM achieves a Top-1 accuracy of 68.5%. The F1 score for reaction prediction on Chem-Bench i",
+     "truncated": true,
+     "score": 0.8846,
+     "scores": {
+      "jepa": 0.7056,
+      "text": 0.5141,
+      "bm25": 2.0093
+     },
+     "source": {
+      "ku_id": "ku_44617031",
+      "type": "result",
+      "paper": {
+       "paper_id": "p_2064403",
+       "arxiv_id": null,
+       "title": null,
+       "year": 2025,
+       "field": "Chemistry",
+       "subfield": "Chemistry",
+       "split": "test"
+      }
+     }
+    },
+    {
+     "rank": 2,
+     "text": "On the USPTO-50k dataset, GRAPHRETRO achieved a top-1 accuracy of 64.2% in the unknown reaction class setting, an 11.7% absolute improvement over the state-of-the-art. On the rare reaction subset, the model achieved a top-1 accuracy of 31.5",
+     "truncated": true,
+     "score": 0.8616,
+     "scores": {
+      "jepa": 0.716,
+      "text": 0.429,
+      "bm25": 3.9584
+     },
+     "source": {
+      "ku_id": "ku_34549464",
+      "type": "result",
+      "paper": {
+       "paper_id": "p_1600573",
+       "arxiv_id": null,
+       "title": null,
+       "year": 2020,
+       "field": "Computer Science",
+       "subfield": "Computer Science",
+       "split": "train"
+      }
+     }
+    }
+   ],
+   "warnings": [
+    {
+     "code": "snippets_only",
+     "part": null,
+     "message": "Answer texts are the index's short snippets; start the server with --full-texts for complete texts."
+    }
+   ],
+   "notes": [
+    "Ranked by fit to published findings; not a fact check."
+   ],
+   "model": {
+    "id": "sci-jepa-1.0.0",
+    "checkpoint": 1,
+    "weights": "best",
+    "sha256": "43375a5b7a4e8d61",
+    "data_version": "paper_a_ku_index_b40bd0e47bd9"
+   },
+   "attribution": "Knowledge units from Scientific-Summaries (LAION, CC-BY-4.0); original papers on arXiv."
+  },
+  "need_more": {
+   "status": "need_more",
+   "session": "ses_-UTGIW_rf4TroFeb",
+   "expires_at": "2026-11-21T15:21:40Z",
+   "task": "forward",
+   "understood": [
+    {
+     "part": "problem",
+     "text": "We want to predict reaction yields from written lab protocols.",
+     "confidence": 0.83
+    },
+    {
+     "part": "method",
+     "text": "We fine-tune a small language model on the protocol text.",
+     "confidence": 1.0
+    }
+   ],
+   "missing": [
+    {
+     "part": "conditions",
+     "reason": "missing_part",
+     "question": "Which data or setup do you use?",
+     "example": "About 50,000 Suzuki coupling protocols from US patents, 80/20 split."
+    }
+   ],
+   "warnings": []
+  }
+ },
+ "parse": {
+  "forward": {
+   "parts": [
+    {
+     "part": "problem",
+     "text": "We want to predict reaction yields from written lab protocols.",
+     "confidence": 0.83,
+     "span": [
+      0,
+      62
+     ],
+     "spans": [
+      [
+       0,
+       62
+      ]
+     ]
+    },
+    {
+     "part": "method",
+     "text": "We fine-tune a small language model on the protocol text.",
+     "confidence": 1.0,
+     "span": [
+      63,
+      120
+     ],
+     "spans": [
+      [
+       63,
+       120
+      ]
+     ]
+    },
+    {
+     "part": "conditions",
+     "text": "We use about 50,000 Suzuki coupling protocols from US patents with an 80/20 split.",
+     "confidence": 0.9,
+     "span": [
+      121,
+      203
+     ],
+     "spans": [
+      [
+       121,
+       203
+      ]
+     ]
+    }
+   ],
+   "language": "en",
+   "warnings": []
+  }
+ },
+ "validate": {
+  "valid": {
+   "valid": true,
+   "task": "forward",
+   "checks": [
+    {
+     "part": "problem",
+     "ok": true
+    },
+    {
+     "part": "method",
+     "ok": true
+    },
+    {
+     "part": "conditions",
+     "ok": true
+    }
+   ],
+   "warnings": []
+  },
+  "missing_part": {
+   "valid": false,
+   "task": "forward",
+   "checks": [
+    {
+     "part": "problem",
+     "ok": true
+    },
+    {
+     "part": "method",
+     "ok": true
+    },
+    {
+     "part": "conditions",
+     "ok": false,
+     "reason": "missing_part",
+     "question": "Which data or setup do you use?",
+     "example": "About 50,000 Suzuki coupling protocols from US patents, 80/20 split."
+    }
+   ],
+   "warnings": []
+  }
+ },
+ "forward": {
+  "forward": {
+   "status": "ok",
+   "task": "forward",
+   "answers": [
+    {
+     "rank": 1,
+     "text": "The Sharpened dataset model without dropout regularization performed best, with a 0.21% reduction in test accuracy but almost one-third of the test loss relative to the model trained on the Original dataset. The average processing time for ",
+     "truncated": true,
+     "score": 0.8918,
+     "scores": {
+      "jepa": 0.7649,
+      "text": 0.5093,
+      "bm25": 6.3792
+     },
+     "source": {
+      "ku_id": "ku_35307808",
+      "type": "result",
+      "paper": {
+       "paper_id": "p_1635482",
+       "arxiv_id": null,
+       "title": null,
+       "year": 2021,
+       "field": "Computer Science",
+       "subfield": "Computer Science",
+       "split": "train"
+      }
+     }
+    },
+    {
+     "rank": 2,
+     "text": "The study demonstrates that large-scale pre-training improves in-domain performance on medical imaging tasks. The JFT pre-trained R101x3 model achieves the best results: +1.2% AUC on mammography, +1.2% mean AUC on CheXpert, and +5.3% top-1 ",
+     "truncated": true,
+     "score": 0.857,
+     "scores": {
+      "jepa": 0.7564,
+      "text": 0.5407,
+      "bm25": 2.8323
+     },
+     "source": {
+      "ku_id": "ku_35110495",
+      "type": "result",
+      "paper": {
+       "paper_id": "p_1626408",
+       "arxiv_id": null,
+       "title": null,
+       "year": 2021,
+       "field": "Computer Science",
+       "subfield": "Computer Science",
+       "split": "train"
+      }
+     }
+    },
+    {
+     "rank": 3,
+     "text": "The study demonstrates that ViTs pre-trained with MAE achieve competitive performance compared to state-of-the-art CNNs on three chest X-ray datasets. On the CheXpert dataset, ViT-S/16 achieves 89.2% mAUC, which is competitive to the best p",
+     "truncated": true,
+     "score": 0.8274,
+     "scores": {
+      "jepa": 0.7307,
+      "text": 0.5666,
+      "bm25": 4.4047
+     },
+     "source": {
+      "ku_id": "ku_17441711",
+      "type": "result",
+      "paper": {
+       "paper_id": "2210.12843",
+       "arxiv_id": "2210.12843",
+       "title": null,
+       "year": 2022,
+       "field": "Computer Science",
+       "subfield": "Computer Science",
+       "split": "train"
+      }
+     }
+    }
+   ],
+   "warnings": [
+    {
+     "code": "snippets_only",
+     "part": null,
+     "message": "Answer texts are the index's short snippets; start the server with --full-texts for complete texts."
+    }
+   ],
+   "notes": [
+    "Ranked by fit to published findings; not a fact check."
+   ],
+   "model": {
+    "id": "sci-jepa-1.0.0",
+    "checkpoint": 1,
+    "weights": "best",
+    "sha256": "43375a5b7a4e8d61",
+    "data_version": "paper_a_ku_index_b40bd0e47bd9"
+   },
+   "attribution": "Knowledge units from Scientific-Summaries (LAION, CC-BY-4.0); original papers on arXiv."
+  },
+  "filtered": {
+   "status": "ok",
+   "task": "forward",
+   "answers": [
+    {
+     "rank": 1,
+     "text": "The Sharpened dataset model without dropout regularization performed best, with a 0.21% reduction in test accuracy but almost one-third of the test loss relative to the model trained on the Original dataset. The average processing time for ",
+     "truncated": true,
+     "score": 0.9036,
+     "scores": {
+      "jepa": 0.7762,
+      "text": 0.5093,
+      "bm25": 6.3966
+     },
+     "source": {
+      "ku_id": "ku_35307808",
+      "type": "result",
+      "paper": {
+       "paper_id": "p_1635482",
+       "arxiv_id": null,
+       "title": null,
+       "year": 2021,
+       "field": "Computer Science",
+       "subfield": "Computer Science",
+       "split": "train"
+      }
+     }
+    },
+    {
+     "rank": 2,
+     "text": "The study demonstrates that large-scale pre-training improves in-domain performance on medical imaging tasks. The JFT pre-trained R101x3 model achieves the best results: +1.2% AUC on mammography, +1.2% mean AUC on CheXpert, and +5.3% top-1 ",
+     "truncated": true,
+     "score": 0.8995,
+     "scores": {
+      "jepa": 0.7804,
+      "text": 0.5407,
+      "bm25": 2.8416
+     },
+     "source": {
+      "ku_id": "ku_35110495",
+      "type": "result",
+      "paper": {
+       "paper_id": "p_1626408",
+       "arxiv_id": null,
+       "title": null,
+       "year": 2021,
+       "field": "Computer Science",
+       "subfield": "Computer Science",
+       "split": "train"
+      }
+     }
+    },
+    {
+     "rank": 3,
+     "text": "The study demonstrates that ViTs pre-trained with MAE achieve competitive performance compared to state-of-the-art CNNs on three chest X-ray datasets. On the CheXpert dataset, ViT-S/16 achieves 89.2% mAUC, which is competitive to the best p",
+     "truncated": true,
+     "score": 0.8677,
+     "scores": {
+      "jepa": 0.7514,
+      "text": 0.5666,
+      "bm25": 4.5843
+     },
+     "source": {
+      "ku_id": "ku_17441711",
+      "type": "result",
+      "paper": {
+       "paper_id": "2210.12843",
+       "arxiv_id": "2210.12843",
+       "title": null,
+       "year": 2022,
+       "field": "Computer Science",
+       "subfield": "Computer Science",
+       "split": "train"
+      }
+     }
+    }
+   ],
+   "warnings": [
+    {
+     "code": "snippets_only",
+     "part": null,
+     "message": "Answer texts are the index's short snippets; start the server with --full-texts for complete texts."
+    }
+   ],
+   "notes": [
+    "Ranked by fit to published findings; not a fact check."
+   ],
+   "model": {
+    "id": "sci-jepa-1.0.0",
+    "checkpoint": 1,
+    "weights": "best",
+    "sha256": "43375a5b7a4e8d61",
+    "data_version": "paper_a_ku_index_b40bd0e47bd9"
+   },
+   "attribution": "Knowledge units from Scientific-Summaries (LAION, CC-BY-4.0); original papers on arXiv."
+  }
+ },
+ "inverse": {
+  "inverse": {
+   "status": "ok",
+   "task": "inverse",
+   "answers": [
+    {
+     "rank": 1,
+     "text": "The study employs a comparative experimental design to evaluate the performance of six pre-trained convolutional neural network models for medical image classification. The dataset consists of chest X-ray images sourced from Kaggle, showing",
+     "truncated": true,
+     "score": 0.9125,
+     "scores": {
+      "jepa": 0.7076,
+      "text": 0.5619,
+      "bm25": 4.4462
+     },
+     "source": {
+      "ku_id": "ku_43962310",
+      "type": "method",
+      "paper": {
+       "paper_id": "2512.04397",
+       "arxiv_id": "2512.04397",
+       "title": null,
+       "year": 2025,
+       "field": "Computer Science",
+       "subfield": "Computer Science",
+       "split": "test"
+      }
+     }
+    },
+    {
+     "rank": 2,
+     "text": "The study employed a benchmark to compare semi- and self-SSL methods on medical image classification tasks. The study used three datasets: TissueMNIST (28x28 kidney cell images, 8 classes), PathMNIST (28x28 colorectal cancer slides, 9 class",
+     "truncated": true,
+     "score": 0.8082,
+     "scores": {
+      "jepa": 0.6687,
+      "text": 0.5499,
+      "bm25": 6.8461
+     },
+     "source": {
+      "ku_id": "ku_18952642",
+      "type": "method",
+      "paper": {
+       "paper_id": "2307.08919",
+       "arxiv_id": "2307.08919",
+       "title": null,
+       "year": 2023,
+       "field": "Computer Science",
+       "subfield": "Computer Science",
+       "split": "train"
+      }
+     }
+    },
+    {
+     "rank": 3,
+     "text": "The study employed a two-class classification approach (EM vs. Confuser) using a dataset created from images collected from the internet and CF-CHU, which collected images from several hospitals in France. The dataset was labeled by expert ",
+     "truncated": true,
+     "score": 0.7856,
+     "scores": {
+      "jepa": 0.7008,
+      "text": 0.5201,
+      "bm25": 0.0
+     },
+     "source": {
+      "ku_id": "ku_14949354",
+      "type": "method",
+      "paper": {
+       "paper_id": "2106.14465",
+       "arxiv_id": "2106.14465",
+       "title": null,
+       "year": 2021,
+       "field": "Computer Science",
+       "subfield": "Computer Science",
+       "split": "train"
+      }
+     }
+    }
+   ],
+   "warnings": [
+    {
+     "code": "snippets_only",
+     "part": null,
+     "message": "Answer texts are the index's short snippets; start the server with --full-texts for complete texts."
+    }
+   ],
+   "notes": [
+    "Ranked by fit to published findings; not a fact check."
+   ],
+   "model": {
+    "id": "sci-jepa-1.0.0",
+    "checkpoint": 1,
+    "weights": "best",
+    "sha256": "43375a5b7a4e8d61",
+    "data_version": "paper_a_ku_index_b40bd0e47bd9"
+   },
+   "attribution": "Knowledge units from Scientific-Summaries (LAION, CC-BY-4.0); original papers on arXiv."
+  }
+ },
+ "abduction": {
+  "abduction": {
+   "status": "ok",
+   "task": "abduction",
+   "answers": [
+    {
+     "rank": 1,
+     "text": "The galaxies studied are generally massive spirals with a median maximum of the rotation curve equal to 137 km/s.",
+     "truncated": false,
+     "score": 0.9107,
+     "scores": {
+      "jepa": 0.7212,
+      "text": 0.5767,
+      "bm25": 7.3544
+     },
+     "source": {
+      "ku_id": "ku_20026380",
+      "type": "claim",
+      "paper": {
+       "paper_id": "astro-ph/0006158",
+       "arxiv_id": "astro-ph/0006158",
+       "title": null,
+       "year": 2000,
+       "field": "Astrophysics",
+       "subfield": "Astrophysics",
+       "split": "train"
+      }
+     }
+    },
+    {
+     "rank": 2,
+     "text": "The rotation curves of the eight fast-rotating spiral galaxies are flat and featureless beyond the optical radius.",
+     "truncated": false,
+     "score": 0.8946,
+     "scores": {
+      "jepa": 0.6637,
+      "text": 0.614,
+      "bm25": 15.3967
+     },
+     "source": {
+      "ku_id": "ku_20866997",
+      "type": "claim",
+      "paper": {
+       "paper_id": "astro-ph/0605542",
+       "arxiv_id": "astro-ph/0605542",
+       "title": null,
+       "year": 2006,
+       "field": "Astrophysics",
+       "subfield": "Astrophysics",
+       "split": "train"
+      }
+     }
+    },
+    {
+     "rank": 3,
+     "text": "There is a close correlation between the rotation amplitudes derived from Hα and 21-cm HI lines.",
+     "truncated": false,
+     "score": 0.8815,
+     "scores": {
+      "jepa": 0.7123,
+      "text": 0.5228,
+      "bm25": 9.1593
+     },
+     "source": {
+      "ku_id": "ku_20026374",
+      "type": "claim",
+      "paper": {
+       "paper_id": "astro-ph/0006158",
+       "arxiv_id": "astro-ph/0006158",
+       "title": null,
+       "year": 2000,
+       "field": "Astrophysics",
+       "subfield": "Astrophysics",
+       "split": "train"
+      }
+     }
+    }
+   ],
+   "warnings": [
+    {
+     "code": "snippets_only",
+     "part": null,
+     "message": "Answer texts are the index's short snippets; start the server with --full-texts for complete texts."
+    }
+   ],
+   "notes": [
+    "Ranked by fit to published findings; not a fact check."
+   ],
+   "model": {
+    "id": "sci-jepa-1.0.0",
+    "checkpoint": 1,
+    "weights": "best",
+    "sha256": "43375a5b7a4e8d61",
+    "data_version": "paper_a_ku_index_b40bd0e47bd9"
+   },
+   "attribution": "Knowledge units from Scientific-Summaries (LAION, CC-BY-4.0); original papers on arXiv."
+  }
+ },
+ "consistency": {
+  "consistency": {
+   "status": "ok",
+   "verdict": "supports",
+   "probabilities": {
+    "supports": 0.9979,
+    "challenges": 0.0021
+   },
+   "related_evidence": {
+    "supports": [
+     {
+      "text": "SMoE-Dropout achieved up to 21%, 37%, and 25% training time savings compared to the dense training of Transformer-XL, BERT, and RoBERTa, respectively.",
+      "probability": 0.9989,
+      "source": {
+       "ku_id": "ku_36620602",
+       "type": "evidence",
+       "paper": {
+        "paper_id": "p_1695943",
+        "arxiv_id": null,
+        "title": null,
+        "year": 2023,
+        "field": "Computer Science",
+        "subfield": "Computer Science",
+        "split": "train"
+       }
+      }
+     },
+     {
+      "text": "The authors report that the proposed losses make the training of transformers more robust.",
+      "probability": 0.9968,
+      "source": {
+       "ku_id": "ku_35358248",
+       "type": "evidence",
+       "paper": {
+        "paper_id": "p_1637797",
+        "arxiv_id": null,
+        "title": null,
+        "year": 2021,
+        "field": "Computer Science",
+        "subfield": "Computer Science",
+        "split": "train"
+       }
+      }
+     }
+    ],
+    "challenges": []
+   },
+   "warnings": [],
+   "notes": [
+    "Probabilities come from the model's relation head; check the sources."
+   ],
+   "model": {
+    "id": "sci-jepa-1.0.0",
+    "checkpoint": 1,
+    "weights": "best",
+    "sha256": "43375a5b7a4e8d61",
+    "data_version": "paper_a_ku_index_b40bd0e47bd9"
+   },
+   "attribution": "Knowledge units from Scientific-Summaries (LAION, CC-BY-4.0); original papers on arXiv."
+  }
+ },
+ "edit_check": {
+  "direction": {
+   "status": "ok",
+   "edit_kind": "direction",
+   "separated": true,
+   "margin": 0.0524,
+   "mode": "representation_distance",
+   "warnings": [],
+   "notes": [
+    "Trained edit kinds: direction, negation, number, substitution. Other kinds are out of scope.",
+    "Without context parts, `margin` is 1 - cosine between the two findings' Sci-JEPA representations; separated means margin >= 0.02 (a starting value). Send `context` (problem, method, conditions) for the evaluation's rule."
+   ],
+   "model": {
+    "id": "sci-jepa-1.0.0",
+    "checkpoint": 1,
+    "weights": "best",
+    "sha256": "43375a5b7a4e8d61",
+    "data_version": "paper_a_ku_index_b40bd0e47bd9"
+   },
+   "attribution": "Knowledge units from Scientific-Summaries (LAION, CC-BY-4.0); original papers on arXiv."
+  }
+ },
+ "intervention": {
+  "method": {
+   "status": "ok",
+   "shift_raw": 0.0792,
+   "shift": 0.1924,
+   "shift_meaning": "0 = the change makes no difference; 1 = as large as switching to an unrelated paper (the mean distance to the predicted results of 16 corpus papers)",
+   "before": [
+    {
+     "rank": 1,
+     "text": "The ChatGPT-assisted summarization of patents was validated, with 99.6% of labels having correct syntax and 99.8% being relevant to their respective patents (Table S1). Of the labels, 77.9% directly described the molecule's function, increa",
+     "truncated": true,
+     "score": 0.8576,
+     "scores": {
+      "jepa": 0.7555,
+      "text": 0.4257,
+      "bm25": 5.6058
+     },
+     "source": {
+      "ku_id": "ku_36917605",
+      "type": "result",
+      "paper": {
+       "paper_id": "p_1709625",
+       "arxiv_id": null,
+       "title": null,
+       "year": 2023,
+       "field": "Chemistry",
+       "subfield": "Chemistry",
+       "split": "train"
+      }
+     }
+    },
+    {
+     "rank": 2,
+     "text": "Thoth achieved state-of-the-art (SOTA) results across all metrics on the SciRecipe-Eval benchmark. Thoth improved average performance by +17.78% relative compared to baselines. Thoth outperformed ChatGPT-4o by +3.69% on average. Compared to",
+     "truncated": true,
+     "score": 0.7497,
+     "scores": {
+      "jepa": 0.7254,
+      "text": 0.5032,
+      "bm25": 0.0
+     },
+     "source": {
+      "ku_id": "ku_43822159",
+      "type": "result",
+      "paper": {
+       "paper_id": "2510.15600",
+       "arxiv_id": "2510.15600",
+       "title": null,
+       "year": 2025,
+       "field": "Computer Science",
+       "subfield": "Artificial Intelligence",
+       "split": "test"
+      }
+     }
+    }
+   ],
+   "after": [
+    {
+     "rank": 1,
+     "text": "The GLN model achieves a top-1 accuracy of 52.5% on the USPTO-50k dataset when the reaction class is unknown, which is 8.1% higher than the second-best method (neuralsym). When the reaction class is given as prior knowledge, GLN achieves a ",
+     "truncated": true,
+     "score": 0.907,
+     "scores": {
+      "jepa": 0.7825,
+      "text": 0.5832,
+      "bm25": 1.1972
+     },
+     "source": {
+      "ku_id": "ku_12284953",
+      "type": "result",
+      "paper": {
+       "paper_id": "2001.01408",
+       "arxiv_id": "2001.01408",
+       "title": null,
+       "year": 2020,
+       "field": "Computer Science",
+       "subfield": "Computer Science",
+       "split": "train"
+      }
+     }
+    },
+    {
+     "rank": 2,
+     "text": "The study reveals that random splits overestimate model performance. A model trained and evaluated on a random split achieves a top-1 accuracy of 65%. Document-based splits result in a top-1 accuracy of 58%, and author-based splits yield 55",
+     "truncated": true,
+     "score": 0.8933,
+     "scores": {
+      "jepa": 0.7845,
+      "text": 0.538,
+      "bm25": 3.1537
+     },
+     "source": {
+      "ku_id": "ku_43564975",
+      "type": "result",
+      "paper": {
+       "paper_id": "2501.06669",
+       "arxiv_id": "2501.06669",
+       "title": null,
+       "year": 2025,
+       "field": "Computer Science",
+       "subfield": "Computer Science",
+       "split": "test"
+      }
+     }
+    }
+   ],
+   "warnings": [
+    {
+     "code": "snippets_only",
+     "part": null,
+     "message": "Answer texts are the index's short snippets; start the server with --full-texts for complete texts."
+    }
+   ],
+   "notes": [
+    "Ranked by fit to published findings; not a fact check."
+   ],
+   "model": {
+    "id": "sci-jepa-1.0.0",
+    "checkpoint": 1,
+    "weights": "best",
+    "sha256": "43375a5b7a4e8d61",
+    "data_version": "paper_a_ku_index_b40bd0e47bd9"
+   },
+   "attribution": "Knowledge units from Scientific-Summaries (LAION, CC-BY-4.0); original papers on arXiv."
+  }
+ },
+ "papers_search": {
+  "default": {
+   "items": [
+    {
+     "paper_id": "2403.00006",
+     "arxiv_id": "2403.00006",
+     "title": null,
+     "year": 2024,
+     "field": "Economics & Finance",
+     "subfield": "Quantitative Finance",
+     "split": "val"
+    },
+    {
+     "paper_id": "2403.00015",
+     "arxiv_id": "2403.00015",
+     "title": null,
+     "year": 2024,
+     "field": "Physics",
+     "subfield": "Condensed Matter Physics",
+     "split": "val"
+    },
+    {
+     "paper_id": "2403.00019",
+     "arxiv_id": "2403.00019",
+     "title": null,
+     "year": 2024,
+     "field": "Statistics",
+     "subfield": "Statistics",
+     "split": "val"
+    }
+   ],
+   "next_cursor": "c_3",
+   "notes": [
+    "The index holds no titles yet: q matches the start of the arXiv ID."
+   ]
+  }
+ },
+ "paper": {
+  "default": {
+   "paper_id": "2403.00015",
+   "arxiv_id": "2403.00015",
+   "title": null,
+   "year": 2024,
+   "field": "Physics",
+   "subfield": "Condensed Matter Physics",
+   "split": "val",
+   "knowledge_units": [
+    {
+     "ku_id": "ku_42571213",
+     "type": "context",
+     "text": "The study of correlated electron systems is motivated by the desire to discover and control new quantum states of matter. Traditional bulk materials often lack the tunability needed to explore these states. Prior approaches have focused on ",
+     "truncated": true
+    },
+    {
+     "ku_id": "ku_42571214",
+     "type": "question",
+     "text": "The central research question is: How can we create new synthetic quantum materials with properties primarily governed by the interface? The lecture explores this question by focusing on the design of interfaces between dissimilar materials",
+     "truncated": true
+    },
+    {
+     "ku_id": "ku_42571215",
+     "type": "method",
+     "text": "The lecture is based on a review of existing literature and does not present new experimental data. The lecture discusses the pulsed laser deposition (PLD) method for synthesizing artificial complex oxide structures. PLD involves using a pu",
+     "truncated": true
+    },
+    {
+     "ku_id": "ku_42571216",
+     "type": "procedure",
+     "text": "The lecture describes the PLD method for growing thin films and heterostructures. The PLD process involves using a pulsed laser, typically with a wavelength of 248 nm and a pulse duration of approximately 20 ns, to ablate a target material.",
+     "truncated": true
+    },
+    {
+     "ku_id": "ku_42571217",
+     "type": "result",
+     "text": "The lecture presents several key results, primarily focusing on the properties of different oxide interfaces. In the case of the BaTiO3/SrTiO3/LaTiO3 superlattice, a 2D polar metal was realized. The metallicity was confirmed by low-temperat",
+     "truncated": true
+    },
+    {
+     "ku_id": "ku_42571218",
+     "type": "interpretation",
+     "text": "The findings suggest that interface engineering and GLE are effective methods for creating new quantum materials with tailored properties. The realization of a 2D polar metal in the BaTiO3/SrTiO3/LaTiO3 superlattice demonstrates the possibi",
+     "truncated": true
+    },
+    {
+     "ku_id": "ku_42571219",
+     "type": "limitation",
+     "text": "The lecture is a review and does not present new experimental data, so there are no internal contradictions. The lecture acknowledges the challenges in fully understanding and controlling the complex interplay of factors at the interface. T",
+     "truncated": true
+    },
+    {
+     "ku_id": "ku_42571220",
+     "type": "claim",
+     "text": "The interface between dissimilar materials can be engineered to create new quantum materials with emergent properties.",
+     "truncated": false
+    },
+    {
+     "ku_id": "ku_42571221",
+     "type": "evidence",
+     "text": "The lecture presents examples of interface engineering, including the creation of a 2D polar metal, a Kondo lattice, and a QSL, which demonstrate the emergence of novel properties at the interfaces. Figure 3 illustrates the potential mismat",
+     "truncated": true
+    },
+    {
+     "ku_id": "ku_42571222",
+     "type": "implication",
+     "text": "This supports the idea that the interface is a new material, as stated by Herbert Kroemer, and opens a route to new materials behaviors using mismatches as control parameters.",
+     "truncated": false
+    },
+    {
+     "ku_id": "ku_42571223",
+     "type": "claim",
+     "text": "Geometrical lattice engineering (GLE) can be used to design and fabricate new quantum materials.",
+     "truncated": false
+    },
+    {
+     "ku_id": "ku_42571224",
+     "type": "evidence",
+     "text": "The lecture describes GLE as a powerful tool to forge new topological and quantum many-body states by designing fully epitaxial ultra-thin films and heterostructures. The examples of the 2D polar metal, the Kondo lattice, and the QSL are al",
+     "truncated": true
+    },
+    {
+     "ku_id": "ku_42571225",
+     "type": "implication",
+     "text": "GLE offers a new approach to create materials with tailored properties, including those with complex chemical compositions or thermodynamically unstable phases in bulk.",
+     "truncated": false
+    },
+    {
+     "ku_id": "ku_42571226",
+     "type": "claim",
+     "text": "A 2D polar metal can be realized in a BaTiO3/SrTiO3/LaTiO3 superlattice.",
+     "truncated": false
+    },
+    {
+     "ku_id": "ku_42571227",
+     "type": "evidence",
+     "text": "Low-temperature electrical transport measurements of BTO/STO/LTO revealed metallicity and a large carrier density of conduction electrons (nc ∼10^14 cm^-2). High-resolution STEM imaging revealed significant Ti-O polar displacements, which i",
+     "truncated": true
+    },
+    {
+     "ku_id": "ku_42571228",
+     "type": "implication",
+     "text": "This provides a template to engineer an interesting quantum many-body state with three coexisting phases – ferroelectricity, ferromagnetism, and superconductivity.",
+     "truncated": false
+    },
+    {
+     "ku_id": "ku_42571229",
+     "type": "claim",
+     "text": "A Kondo lattice and spin-polarized 2D electron gas can be created in LaTiO3/SrTiO3/YTiO3 superlattices.",
+     "truncated": false
+    },
+    {
+     "ku_id": "ku_42571230",
+     "type": "evidence",
+     "text": "All three samples 3LTO/nSTO/3YTO (n=2,3,6) show characteristic metallic behavior with a weak upturn at a lower temperature. The observed Kondo scaling behavior lends support to the formation of the interfacial lattice of localized magnetic ",
+     "truncated": true
+    },
+    {
+     "ku_id": "ku_42571231",
+     "type": "implication",
+     "text": "This provides a platform for spintronics applications with spin-polarized 2D metallicity.",
+     "truncated": false
+    },
+    {
+     "ku_id": "ku_42571232",
+     "type": "claim",
+     "text": "A quantum spin liquid (QSL) can be realized in a geometrically frustrated (111)-oriented CoCr2O4 thin film.",
+     "truncated": false
+    },
+    {
+     "ku_id": "ku_42571233",
+     "type": "evidence",
+     "text": "The 4QL CoCr2O4 samples exhibited long-range magnetic order, while the 1QL samples showed paramagnetic behavior with no hysteresis loop. Torque magnetometry measurements on the 1QL sample revealed a reversible parabolic relationship, indica",
+     "truncated": true
+    },
+    {
+     "ku_id": "ku_42571234",
+     "type": "implication",
+     "text": "This opens new avenues for exploring exotic quantum states and potentially developing new materials for quantum computing.",
+     "truncated": false
+    }
+   ]
+  }
+ },
+ "ku": {
+  "default": {
+   "ku_id": "ku_17441711",
+   "type": "result",
+   "text": "The study demonstrates that ViTs pre-trained with MAE achieve competitive performance compared to state-of-the-art CNNs on three chest X-ray datasets. On the CheXpert dataset, ViT-S/16 achieves 89.2% mAUC, which is competitive to the best p",
+   "truncated": true,
+   "paper": {
+    "paper_id": "2210.12843",
+    "arxiv_id": "2210.12843",
+    "title": null,
+    "year": 2022,
+    "field": "Computer Science",
+    "subfield": "Computer Science",
+    "split": "train"
+   }
+  }
+ },
+ "ask_paper": {
+  "forward": {
+   "status": "ok",
+   "paper": {
+    "paper_id": "2403.00015",
+    "arxiv_id": "2403.00015",
+    "title": null,
+    "year": 2024,
+    "field": "Physics",
+    "subfield": "Condensed Matter Physics",
+    "split": "val"
+   },
+   "task": "forward",
+   "understood": [
+    {
+     "part": "problem",
+     "text": "The study of correlated electron systems is motivated by the desire to discover and control new quantum states of matter. Traditional bulk materials often lack the tunability needed to explore these states. Prior approaches have focused on  The central research question is: How can we create new synthetic quantum materials with properties primarily governed by the interface? The lecture explores this question by focusing on the design of interfaces between dissimilar materials"
+    },
+    {
+     "part": "method",
+     "text": "The lecture is based on a review of existing literature and does not present new experimental data. The lecture discusses the pulsed laser deposition (PLD) method for synthesizing artificial complex oxide structures. PLD involves using a pu"
+    },
+    {
+     "part": "conditions",
+     "text": "The lecture describes the PLD method for growing thin films and heterostructures. The PLD process involves using a pulsed laser, typically with a wavelength of 248 nm and a pulse duration of approximately 20 ns, to ablate a target material."
+    },
+    {
+     "part": "result",
+     "text": "The lecture presents several key results, primarily focusing on the properties of different oxide interfaces. In the case of the BaTiO3/SrTiO3/LaTiO3 superlattice, a 2D polar metal was realized. The metallicity was confirmed by low-temperat"
+    }
+   ],
+   "answers": [
+    {
+     "rank": 1,
+     "text": "The lecture presents several key results, primarily focusing on the properties of different oxide interfaces. In the case of the BaTiO3/SrTiO3/LaTiO3 superlattice, a 2D polar metal was realized. The metallicity was confirmed by low-temperat",
+     "truncated": true,
+     "score": 0.8801,
+     "scores": {
+      "jepa": 0.7897,
+      "text": 0.4434,
+      "bm25": 20.9962
+     },
+     "source": {
+      "ku_id": "ku_42571217",
+      "type": "result",
+      "paper": {
+       "paper_id": "2403.00015",
+       "arxiv_id": "2403.00015",
+       "title": null,
+       "year": 2024,
+       "field": "Physics",
+       "subfield": "Condensed Matter Physics",
+       "split": "val"
+      }
+     }
+    },
+    {
+     "rank": 2,
+     "text": "The study found that \"true\" LBL growth is not achieved in PLD. Time-resolved SXRD measurements revealed that crystallization and a majority of interlayer mass transport occur during the plume/substrate interaction, on a time scale of micros",
+     "truncated": true,
+     "score": 0.7547,
+     "scores": {
+      "jepa": 0.7351,
+      "text": 0.5316,
+      "bm25": 2.1466
+     },
+     "source": {
+      "ku_id": "ku_482384",
+      "type": "result",
+      "paper": {
+       "paper_id": "0802.3386",
+       "arxiv_id": "0802.3386",
+       "title": null,
+       "year": 2008,
+       "field": "Physics",
+       "subfield": "Materials Science",
+       "split": "train"
+      }
+     }
+    }
+   ],
+   "truth": [
+    {
+     "ku_id": "ku_42571217",
+     "type": "result",
+     "text": "The lecture presents several key results, primarily focusing on the properties of different oxide interfaces. In the case of the BaTiO3/SrTiO3/LaTiO3 superlattice, a 2D polar metal was realized. The metallicity was confirmed by low-temperat",
+     "truncated": true,
+     "paper": {
+      "paper_id": "2403.00015",
+      "arxiv_id": "2403.00015",
+      "title": null,
+      "year": 2024,
+      "field": "Physics",
+      "subfield": "Condensed Matter Physics",
+      "split": "val"
+     },
+     "rank": 1,
+     "of": 64
+    }
+   ],
+   "warnings": [
+    {
+     "code": "snippets_only",
+     "part": null,
+     "message": "Answer texts are the index's short snippets; start the server with --full-texts for complete texts."
+    }
+   ],
+   "notes": [
+    "Ranked by fit to published findings; not a fact check."
+   ],
+   "model": {
+    "id": "sci-jepa-1.0.0",
+    "checkpoint": 1,
+    "weights": "best",
+    "sha256": "43375a5b7a4e8d61",
+    "data_version": "paper_a_ku_index_b40bd0e47bd9"
+   },
+   "attribution": "Knowledge units from Scientific-Summaries (LAION, CC-BY-4.0); original papers on arXiv."
+  }
+ },
+ "session_answers": {
+  "conditions": {
+   "status": "ok",
+   "session": "ses_GFAEbN5qRqxkxLaS",
+   "expires_at": "2026-11-21T15:21:46Z",
+   "task": "forward",
+   "understood": [
+    {
+     "part": "problem",
+     "text": "We want to predict reaction yields from written lab protocols.",
+     "confidence": 0.83
+    },
+    {
+     "part": "method",
+     "text": "We fine-tune a small language model on the protocol text.",
+     "confidence": 1.0
+    },
+    {
+     "part": "conditions",
+     "text": "About 50,000 Suzuki coupling protocols from US patents, 80/20 split."
+    }
+   ],
+   "answers": [
+    {
+     "rank": 1,
+     "text": "The ChatGPT-assisted summarization of patents was validated, with 99.6% of labels having correct syntax and 99.8% being relevant to their respective patents (Table S1). Of the labels, 77.9% directly described the molecule's function, increa",
+     "truncated": true,
+     "score": 0.8523,
+     "scores": {
+      "jepa": 0.7465,
+      "text": 0.4007,
+      "bm25": 5.6192
+     },
+     "source": {
+      "ku_id": "ku_36917605",
+      "type": "result",
+      "paper": {
+       "paper_id": "p_1709625",
+       "arxiv_id": null,
+       "title": null,
+       "year": 2023,
+       "field": "Chemistry",
+       "subfield": "Chemistry",
+       "split": "train"
+      }
+     }
+    },
+    {
+     "rank": 2,
+     "text": "ChemLLM achieves a Top-5 accuracy of 92.3% on the ChemBench dataset, surpassing GPT-3.5 by 8.7% absolute improvement. On the USPTO-MIT dataset, ChemLLM achieves a Top-1 accuracy of 68.5%. The F1 score for reaction prediction on Chem-Bench i",
+     "truncated": true,
+     "score": 0.7708,
+     "scores": {
+      "jepa": 0.6981,
+      "text": 0.5247,
+      "bm25": 2.0022
+     },
+     "source": {
+      "ku_id": "ku_44617031",
+      "type": "result",
+      "paper": {
+       "paper_id": "p_2064403",
+       "arxiv_id": null,
+       "title": null,
+       "year": 2025,
+       "field": "Chemistry",
+       "subfield": "Chemistry",
+       "split": "test"
+      }
+     }
+    }
+   ],
+   "warnings": [
+    {
+     "code": "snippets_only",
+     "part": null,
+     "message": "Answer texts are the index's short snippets; start the server with --full-texts for complete texts."
+    }
+   ],
+   "notes": [
+    "Ranked by fit to published findings; not a fact check."
+   ],
+   "model": {
+    "id": "sci-jepa-1.0.0",
+    "checkpoint": 1,
+    "weights": "best",
+    "sha256": "43375a5b7a4e8d61",
+    "data_version": "paper_a_ku_index_b40bd0e47bd9"
+   },
+   "attribution": "Knowledge units from Scientific-Summaries (LAION, CC-BY-4.0); original papers on arXiv."
+  }
+ },
+ "session_get": {
+  "default": {
+   "session": "ses_2eVzQ9jSX2E9_oXa",
+   "expires_at": "2026-11-21T15:21:46Z",
+   "task": "forward",
+   "understood": [
+    {
+     "part": "problem",
+     "text": "We want to predict reaction yields from written lab protocols.",
+     "confidence": 0.83
+    },
+    {
+     "part": "method",
+     "text": "We fine-tune a small language model on the protocol text.",
+     "confidence": 1.0
+    }
+   ],
+   "missing": [
+    {
+     "part": "conditions",
+     "reason": "missing_part",
+     "question": "Which data or setup do you use?",
+     "example": "About 50,000 Suzuki coupling protocols from US patents, 80/20 split."
+    }
+   ],
+   "last": {
+    "status": "need_more",
+    "session": "ses_2eVzQ9jSX2E9_oXa",
+    "expires_at": "2026-11-21T15:21:46Z",
+    "task": "forward",
+    "understood": [
+     {
+      "part": "problem",
+      "text": "We want to predict reaction yields from written lab protocols.",
+      "confidence": 0.83
+     },
+     {
+      "part": "method",
+      "text": "We fine-tune a small language model on the protocol text.",
+      "confidence": 1.0
+     }
+    ],
+    "missing": [
+     {
+      "part": "conditions",
+      "reason": "missing_part",
+      "question": "Which data or setup do you use?",
+      "example": "About 50,000 Suzuki coupling protocols from US patents, 80/20 split."
+     }
+    ],
+    "warnings": []
+   }
+  }
+ },
+ "_errors": {
+  "400": {
+   "type": "https://sci-jepa.org/problems/invalid_request",
+   "title": "The request is not valid",
+   "status": 400,
+   "instance": "/v1/predict/forward",
+   "request_id": "req_482ff9ab3e4c4a6a",
+   "code": "invalid_request",
+   "errors": [
+    {
+     "field": "parts",
+     "code": "missing",
+     "message": "Field required",
+     "hint": null
+    },
+    {
+     "field": "problem",
+     "code": "unknown_field",
+     "message": "Extra inputs are not permitted",
+     "hint": null
+    },
+    {
+     "field": "method",
+     "code": "unknown_field",
+     "message": "Extra inputs are not permitted",
+     "hint": null
+    },
+    {
+     "field": "conditions",
+     "code": "unknown_field",
+     "message": "Extra inputs are not permitted",
+     "hint": null
+    }
+   ]
+  },
+  "422": {
+   "type": "https://sci-jepa.org/problems/too_vague",
+   "title": "The input is incomplete or too vague",
+   "status": 422,
+   "instance": "/v1/predict/forward",
+   "request_id": "req_f499cbe4a67844e5",
+   "code": "too_vague",
+   "errors": [
+    {
+     "field": "parts.method",
+     "code": "too_vague",
+     "message": "What exactly did you do: which model, algorithm or technique?",
+     "hint": "For example: Fine-tuning a small language model on the protocol text."
+    }
+   ]
+  },
+  "403": {
+   "type": "https://sci-jepa.org/problems/reveal_not_allowed",
+   "title": "reveal_truth is allowed only for validation papers",
+   "status": 403,
+   "instance": "/v1/ask/paper",
+   "request_id": "req_1d0a5f0846fd4926",
+   "code": "reveal_not_allowed",
+   "detail": "2210.12843 is a train paper; test papers stay hidden until the review of the accompanying paper is complete."
+  },
+  "404": {
+   "type": "https://sci-jepa.org/problems/not_found",
+   "title": "Not found",
+   "status": 404,
+   "instance": "/v1/sessions/ses_doesnotexist",
+   "request_id": "req_343e590a1bf1475b",
+   "code": "not_found",
+   "detail": "'ses_doesnotexist' does not exist or expired"
+  }
+ }
+}

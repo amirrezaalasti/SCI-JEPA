@@ -18,7 +18,12 @@ MODEL=<model folder> sbatch SCI-JEPA-training/deploy/api/serve_2080ti.sbatch
 
 `<model folder>` is a folder that training wrote (`train.save_model`), holding `config.json` and `model.safetensors`. With `--index auto`, the server finds the KU index the model was trained on under `$PAPER_A_INDEX_DIR`. You can also pass the index `.pt` file, or `--index none` to run the model without a corpus (only consistency, edit check and the intervention shift then work).
 
-The interactive docs are at `/v1/docs`, and the OpenAPI file is at `/v1/openapi.json`. `/v1/health` answers straight away. `/v1/ready` returns 503 until the model, the index and the search are all loaded.
+The interactive docs are at `/v1/docs`, and the OpenAPI file is at `/v1/openapi.json`. Every endpoint shows a request that works ("Try it out" fills it in) and the answer the deployed model gave to it, plus the error answers. The requests are in `examples.py`; the answers in `examples_responses.json` were recorded from a running server. To check the docs against a server, or record its answers again after a new model:
+
+```bash
+.venv/bin/python scripts/check_api_examples.py --url http://<node>:8000            # send each example, compare status and shape
+.venv/bin/python scripts/check_api_examples.py --url http://<node>:8000 --write    # then restart the server
+``` `/v1/health` answers straight away. `/v1/ready` returns 503 until the model, the index and the search are all loaded.
 
 **First start with the full corpus.** The server builds one vector per paper, the centred mean of its KUs' text embeddings. That takes one pass over `comp_x` (61M × 768), which can take a while on NFS. The result is cached as `api_paper_vecs_<index>.npz` next to the index, or in `--cache-dir` if the index folder is read-only.
 

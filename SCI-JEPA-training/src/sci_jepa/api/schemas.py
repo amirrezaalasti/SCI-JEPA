@@ -11,7 +11,8 @@ RankGoal = Literal["forward", "inverse", "abduction"]
 Scoring = Literal["hybrid", "jepa", "text", "bm25"]
 FieldName = Literal["Physics", "Computer Science", "Mathematics", "Astrophysics", "EESS & Engineering",
                     "Quantitative Biology & Medicine", "Statistics", "Economics & Finance", "Chemistry", "Other"]
-ModelPin = Optional[str]
+ModelPin = Annotated[Optional[str], Field(description="Leave out to use the served model (GET /v1/models); "
+                                                       "another ID is rejected with 422.")]
 
 
 class Strict(BaseModel):

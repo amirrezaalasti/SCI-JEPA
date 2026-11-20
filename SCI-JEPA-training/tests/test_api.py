@@ -221,3 +221,37 @@ def test_ask_paper(client):
     assert b["status"] == "ok" and b["paper"]["paper_id"] == pid, b
     r = client.post("/v1/ask/paper", json={"paper_id": pid, "goal": "forward", "reveal_truth": True})
     assert r.status_code == 403                          # train paper: no truth
+
+
+# ------------------------------------------------------------------ the documented examples (/v1/docs)
+def test_docs_examples(client):
+    """Every POST endpoint documents a request that the server accepts, every documented field keeps its nulls,
+    and each documented error example has the status it is shown under. Paper IDs of the real corpus are not in
+    the synthetic one, so /v1/ask/paper is only checked for its request schema here; the deployed server is
+    checked by scripts/check_api_examples.py."""
+    from sci_jepa.api import examples as X
+    spec = client.get("/v1/openapi.json").json()
+    rec = X.load_responses()
+    for name, (method, path) in X.ROUTES.items():
+        op = spec["paths"][path][method.lower()]
+        if method == "POST":
+            exs = op["requestBody"]["content"]["application/json"]["examples"]
+            assert list(exs) == list(X.REQUESTS[name]), name
+            for ex_name, ex in exs.items():
+                assert ex["value"] == X.REQUESTS[name][ex_name][1]
+                if name == "ask_paper":
+                    continue
+                p = path
+                if path.startswith("/v1/sessions/"):
+                    sid = client.post("/v1/ask", json=X.REQUESTS["ask"]["need_more"][1]).json()["session"]
+                    p = path.replace("{session_id}", sid)
+                r = client.post(p, json=ex["value"])
+                assert r.status_code == 200, (name, ex_name, r.json())
+        if name in rec and name != "session_delete":
+            docs = op["responses"]["200"]["content"]["application/json"]["examples"]
+            assert {k: v["value"] for k, v in docs.items()} == rec[name], name
+    for code, e in rec.get("_errors", {}).items():
+        assert e["status"] == int(code)
+    body = X.ERRORS["400"][2]
+    r = client.post("/v1/predict/forward", json=body)
+    assert r.status_code == 400 and r.json()["errors"][0]["field"] == "parts"

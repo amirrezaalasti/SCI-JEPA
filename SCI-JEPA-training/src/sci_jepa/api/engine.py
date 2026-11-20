@@ -451,6 +451,9 @@ class Engine:
                  if isinstance(parts.get(p), str) and parts.get(p)]
         preds = {t: F.normalize(self.predict(rec, t, task), dim=-1) for t in targets}
         papers, q, warn = self.shortlist(given, filters=filters, include=include)
+        if not papers:                                   # the filters exclude every paper
+            return [], warn + [{"code": "no_matching_papers", "part": None,
+                                "message": "No corpus paper matches the filters; widen the fields or years."}], {}
         tids = {COMP_TYPES.index(t) for t in targets}
         pos, H = self.target_keys(papers)
         cands = [int(c) for p in papers for c in gi.paper_comps[p] if int(gi.comp_type[c]) in tids and int(c) in pos]

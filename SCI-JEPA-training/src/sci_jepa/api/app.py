@@ -19,11 +19,14 @@ import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, Query, Request
+from typing import Annotated
+
+from fastapi import Body, FastAPI, Path, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from sci_jepa.api import examples as X
 from sci_jepa.api import guard as G
 from sci_jepa.api import schemas as M
 from sci_jepa.api import textparts as T
@@ -169,6 +172,8 @@ def create_app(engine, session_ttl=24 * 3600, load_in_background=True, limits=No
     app.state.engine, app.state.sessions = engine, Sessions(session_ttl, L.max_sessions)
     app.state.gate, app.state.limiter, app.state.idempotency, app.state.metrics = gate, limiter, idem, metrics
     app.state.limits = L
+    base_openapi = app.openapi
+    app.openapi = lambda: X.keep_nulls(base_openapi())   # examples keep their null values (see examples.py)
 
     # ---------------------------------------------------------------- middleware and handlers
     @app.middleware("http")
@@ -355,11 +360,11 @@ def create_app(engine, session_ttl=24 * 3600, load_in_background=True, limits=No
     # ---------------------------------------------------------------- 2. system
     # health, ready and metrics are `async def`: they run on the event loop, not in the thread pool, so they
     # answer even while every worker thread waits for the GPU.
-    @app.get("/v1/health", tags=["system"])
+    @app.get("/v1/health", tags=["system"], responses=X.responses("health", ()))
     async def health():
         return {"status": "ok"}
 
-    @app.get("/v1/ready", tags=["system"])
+    @app.get("/v1/ready", tags=["system"], responses=X.responses("ready", ()))
     async def ready():
         s = engine.state
         index_wanted = engine.index_spec not in (None, "", "none")
@@ -392,18 +397,18 @@ def create_app(engine, session_ttl=24 * 3600, load_in_background=True, limits=No
                 g[f"cuda_memory_{k}"] = ("gauge", mem[k])
         return PlainTextResponse(metrics.render(g), media_type="text/plain; version=0.0.4")
 
-    @app.get("/v1/info", tags=["system"])
+    @app.get("/v1/info", tags=["system"], responses=X.responses("info", ()))
     def info():
         need_model()
         return engine.info()
 
-    @app.get("/v1/models", tags=["system"])
+    @app.get("/v1/models", tags=["system"], responses=X.responses("models", ()))
     def models():
         need_model()
         return {"models": [{"id": engine.model_id, "default": True, "weights": engine.weights,
                             "sha256": engine.weights_sha256[:16]}]}
 
-    @app.get("/v1/tasks", tags=["system"])
+    @app.get("/v1/tasks", tags=["system"], responses=X.responses("tasks", ()))
     def tasks():
         return {"tasks": {k: {"question": v["question"], "requires": v["requires"]} for k, v in T.TASKS.items()},
                 "parts": T.PARTS}
@@ -440,8 +445,8 @@ def create_app(engine, session_ttl=24 * 3600, load_in_background=True, limits=No
         s["last"] = body
         return body
 
-    @app.post("/v1/ask", tags=["main flow"])
-    def ask(req: M.AskRequest):
+    @app.post("/v1/ask", tags=["main flow"], responses=X.responses("ask"))
+    def ask(req: Annotated[M.AskRequest, Body(openapi_examples=X.body("ask"))]):
         need_model(req.model)
         text, pii = T.scrub_pii(req.text)
         warns = [{"code": "pii_removed", "part": None, "message": "Emails or phone numbers were removed."}] if pii else []
@@ -467,8 +472,10 @@ def create_app(engine, session_ttl=24 * 3600, load_in_background=True, limits=No
                                       options={"top_k": top_k, "scoring": scoring, "filters": filters})
         return advance(s, warns)
 
-    @app.post("/v1/sessions/{session_id}/answers", tags=["main flow"])
-    def session_answers(session_id: str, req: M.SessionAnswers):
+    @app.post("/v1/sessions/{session_id}/answers", tags=["main flow"],
+              responses=X.responses("session_answers", ("400", "404", "422")))
+    def session_answers(session_id: Annotated[str, Path(description="`session` from POST /v1/ask")],
+                        req: Annotated[M.SessionAnswers, Body(openapi_examples=X.body("session_answers"))]):
         need_model()
         s = app.state.sessions.get(session_id)
         allowed = set(T.PARTS) | set(T.EXTRA_PARTS)
@@ -493,8 +500,8 @@ def create_app(engine, session_ttl=24 * 3600, load_in_background=True, limits=No
         finally:
             s["_lock"].release()
 
-    @app.get("/v1/sessions/{session_id}", tags=["main flow"])
-    def session_get(session_id: str):
+    @app.get("/v1/sessions/{session_id}", tags=["main flow"], responses=X.responses("session_get", ("404",)))
+    def session_get(session_id: Annotated[str, Path(description="`session` from POST /v1/ask")]):
         s = app.state.sessions.get(session_id)
         task = s["task"]
         _, checks, _ = validate(task, s["parts"], s["conf"]) if task else (None, [], None)
@@ -504,15 +511,15 @@ def create_app(engine, session_ttl=24 * 3600, load_in_background=True, limits=No
                              "example": c["example"]} for c in checks if not c["ok"]],
                 "last": s["last"]}
 
-    @app.delete("/v1/sessions/{session_id}", status_code=204, tags=["main flow"])
-    def session_delete(session_id: str):
+    @app.delete("/v1/sessions/{session_id}", status_code=204, tags=["main flow"], responses=X.responses("session_delete", ("404",)))
+    def session_delete(session_id: Annotated[str, Path(description="`session` from POST /v1/ask")]):
         app.state.sessions.delete(session_id)
         idem.forget_session(session_id)                  # stored idempotent replays hold the same text
         return Response(status_code=204)
 
     # ---------------------------------------------------------------- 4. building blocks
-    @app.post("/v1/parse", tags=["building blocks"])
-    def parse(req: M.ParseRequest):
+    @app.post("/v1/parse", tags=["building blocks"], responses=X.responses("parse"))
+    def parse(req: Annotated[M.ParseRequest, Body(openapi_examples=X.body("parse"))]):
         text, pii = T.scrub_pii(req.text)
         warns = [{"code": "pii_removed", "part": None, "message": "Emails or phone numbers were removed."}] if pii else []
         parts = T.split_parts(text, req.goal)
@@ -520,8 +527,8 @@ def create_app(engine, session_ttl=24 * 3600, load_in_background=True, limits=No
                   for e in parts if e["confidence"] < T.LOW_CONFIDENCE]
         return {"parts": parts, "language": "en" if T.is_english(text) else "unknown", "warnings": warns}
 
-    @app.post("/v1/validate", tags=["building blocks"])
-    def validate_ep(req: M.ValidateRequest):
+    @app.post("/v1/validate", tags=["building blocks"], responses=X.responses("validate"))
+    def validate_ep(req: Annotated[M.ValidateRequest, Body(openapi_examples=X.body("validate"))]):
         parts = {k: v for k, v in req.parts.model_dump().items() if v}
         if req.parts.change is not None:
             parts["change"] = req.parts.change
@@ -539,20 +546,20 @@ def create_app(engine, session_ttl=24 * 3600, load_in_background=True, limits=No
         result, w, notes = run(task, parts, top_k, scoring, filters)
         return {"status": "ok", "task": task, **wrap(result, warns + w, notes)}
 
-    @app.post("/v1/predict/forward", tags=["tasks"])
-    def predict_forward(req: M.TaskRequest):
+    @app.post("/v1/predict/forward", tags=["tasks"], responses=X.responses("forward"))
+    def predict_forward(req: Annotated[M.TaskRequest, Body(openapi_examples=X.body("forward"))]):
         return structured("forward", req)
 
-    @app.post("/v1/predict/inverse", tags=["tasks"])
-    def predict_inverse(req: M.TaskRequest):
+    @app.post("/v1/predict/inverse", tags=["tasks"], responses=X.responses("inverse"))
+    def predict_inverse(req: Annotated[M.TaskRequest, Body(openapi_examples=X.body("inverse"))]):
         return structured("inverse", req)
 
-    @app.post("/v1/predict/abduction", tags=["tasks"])
-    def predict_abduction(req: M.TaskRequest):
+    @app.post("/v1/predict/abduction", tags=["tasks"], responses=X.responses("abduction"))
+    def predict_abduction(req: Annotated[M.TaskRequest, Body(openapi_examples=X.body("abduction"))]):
         return structured("abduction", req)
 
-    @app.post("/v1/consistency", tags=["tasks"])
-    def consistency(req: M.ConsistencyRequest):
+    @app.post("/v1/consistency", tags=["tasks"], responses=X.responses("consistency"))
+    def consistency(req: Annotated[M.ConsistencyRequest, Body(openapi_examples=X.body("consistency"))]):
         need_model(req.model)
         parts = req.parts.given()
         ok, checks, warns = validate("consistency", parts)
@@ -564,8 +571,8 @@ def create_app(engine, session_ttl=24 * 3600, load_in_background=True, limits=No
         return {"status": "ok", **wrap(out, warns + w, ("Probabilities come from the model's relation head; "
                                                         "check the sources.",))}
 
-    @app.post("/v1/edit-check", tags=["tasks"])
-    def edit_check(req: M.EditCheckRequest):
+    @app.post("/v1/edit-check", tags=["tasks"], responses=X.responses("edit_check"))
+    def edit_check(req: Annotated[M.EditCheckRequest, Body(openapi_examples=X.body("edit_check"))]):
         need_model(req.model)
         ok, checks, warns = validate("edit_check", {"original": req.original, "edited": req.edited})
         if not ok:
@@ -580,8 +587,8 @@ def create_app(engine, session_ttl=24 * 3600, load_in_background=True, limits=No
         notes = out.pop("notes")
         return {"status": "ok", **wrap(out, warns, notes)}
 
-    @app.post("/v1/intervention", tags=["tasks"])
-    def intervention(req: M.InterventionRequest):
+    @app.post("/v1/intervention", tags=["tasks"], responses=X.responses("intervention"))
+    def intervention(req: Annotated[M.InterventionRequest, Body(openapi_examples=X.body("intervention"))]):
         need_model(req.model)
         parts = {**req.parts.given(), "change": req.change}
         ok, checks, warns = validate("intervention", parts)
@@ -599,27 +606,28 @@ def create_app(engine, session_ttl=24 * 3600, load_in_background=True, limits=No
                 "field": "paper_id", "code": "invalid_id", "message": f"{pid!r} is not an arXiv ID",
                 "hint": "Use e.g. 2403.01234 or hep-th/9901001 (or a p_<n> ID from an earlier answer)."}])
 
-    @app.get("/v1/papers/search", tags=["papers"])
-    def papers_search(q: str = Query(..., min_length=1, max_length=200), limit: int = Query(20, ge=1, le=100),
+    @app.get("/v1/papers/search", tags=["papers"], responses=X.responses("papers_search", ("422",)))
+    def papers_search(q: str = Query(..., min_length=1, max_length=200, openapi_examples=X.param("papers_search", "q")),
+                      limit: int = Query(20, ge=1, le=100, openapi_examples=X.param("papers_search", "limit")),
                       cursor: str = Query(None, pattern=r"^c_\d+$")):
         need_model()
         items, nxt = engine.search_ids(q.strip(), limit, int(cursor[2:]) if cursor else 0)
         return {"items": items, "next_cursor": f"c_{nxt}" if nxt is not None else None,
                 "notes": ["The index holds no titles yet: q matches the start of the arXiv ID."]}
 
-    @app.get("/v1/papers/{paper_id:path}", tags=["papers"])
-    def paper(paper_id: str):
+    @app.get("/v1/papers/{paper_id:path}", tags=["papers"], responses=X.responses("paper", ("404", "422")))
+    def paper(paper_id: Annotated[str, Path(openapi_examples=X.param("paper", "paper_id"))]):
         need_model()
         check_id(paper_id)
         return engine.paper(paper_id)
 
-    @app.get("/v1/kus/{ku_id}", tags=["papers"])
-    def ku(ku_id: str):
+    @app.get("/v1/kus/{ku_id}", tags=["papers"], responses=X.responses("ku", ("404",)))
+    def ku(ku_id: Annotated[str, Path(openapi_examples=X.param("ku", "ku_id"))]):
         need_model()
         return engine.ku(ku_id)
 
-    @app.post("/v1/ask/paper", tags=["papers"])
-    def ask_paper(req: M.AskPaperRequest):
+    @app.post("/v1/ask/paper", tags=["papers"], responses=X.responses("ask_paper", ("400", "403", "404", "422")))
+    def ask_paper(req: Annotated[M.AskPaperRequest, Body(openapi_examples=X.body("ask_paper"))]):
         need_model(req.model)
         check_id(req.paper_id)
         p = engine.paper_index(req.paper_id)
