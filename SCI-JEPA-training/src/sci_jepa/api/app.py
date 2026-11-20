@@ -36,6 +36,7 @@ log = logging.getLogger("sci_jepa.api")
 RANK_NOTE = "Ranked by fit to published findings; not a fact check."
 ARXIV_ID = re.compile(r"^\d{4}\.\d{4,5}(v\d+)?$|^[a-z\-]+(\.[A-Z]{2})?/\d{7}(v\d+)?$")
 CORPUS_ID = re.compile(r"^p_\d+$")                     # corpus papers without an arXiv ID
+DOI = re.compile(r"^10\.\d{4,9}/\S+$")                 # specification 7a; the index holds no DOIs yet
 
 
 # ==================================================================== errors (RFC 9457)
@@ -405,7 +406,8 @@ def create_app(engine, session_ttl=24 * 3600, load_in_background=True, limits=No
     @app.get("/v1/models", tags=["system"], responses=X.responses("models", ()))
     def models():
         need_model()
-        return {"models": [{"id": engine.model_id, "default": True, "weights": engine.weights,
+        return {"models": [{"id": engine.model_id, "default": True, "released": engine.released_on(),
+                            "checkpoint": engine.step(), "weights": engine.weights,
                             "sha256": engine.weights_sha256[:16]}]}
 
     @app.get("/v1/tasks", tags=["system"], responses=X.responses("tasks", ()))
@@ -454,13 +456,13 @@ def create_app(engine, session_ttl=24 * 3600, load_in_background=True, limits=No
             raise Problem(422, "Please write at least two sentences", "too_short", errors=[{
                 "field": "text", "code": "too_short", "message": "Write at least 2 sentences.",
                 "hint": "Describe your problem, what you did, and (if you have it) what came out."}])
+        if T.is_gibberish(text):                         # before the language check: keyboard mash has no language
+            raise Problem(422, "Unreadable text", "invalid_text", errors=[{
+                "field": "text", "code": "invalid_text", "message": "Please enter a readable description.", "hint": None}])
         if not T.is_english(text):
             raise Problem(422, "Unsupported language", "unsupported_language", errors=[{
                 "field": "text", "code": "unsupported_language",
                 "message": "The model was trained on English papers; please write in English.", "hint": None}])
-        if T.is_gibberish(text):
-            raise Problem(422, "Unreadable text", "invalid_text", errors=[{
-                "field": "text", "code": "invalid_text", "message": "Please enter a readable description.", "hint": None}])
         found = T.split_parts(text, req.goal)
         if not found or all(e["confidence"] < 0.5 for e in found):
             raise Problem(422, "No research content found", "not_scientific", errors=[{
@@ -601,9 +603,12 @@ def create_app(engine, session_ttl=24 * 3600, load_in_background=True, limits=No
 
     # ---------------------------------------------------------------- 6. papers and the corpus
     def check_id(pid):
+        if DOI.match(pid):                               # a well-formed DOI, but the index cannot look DOIs up yet
+            raise Problem(404, "DOIs are not indexed yet", "not_found",
+                          detail=f"{pid!r} is a valid DOI, but the corpus index holds no DOIs; use the paper's arXiv ID.")
         if not (ARXIV_ID.match(pid) or CORPUS_ID.match(pid)):
-            raise Problem(422, "Not an arXiv ID", "invalid_id", errors=[{
-                "field": "paper_id", "code": "invalid_id", "message": f"{pid!r} is not an arXiv ID",
+            raise Problem(422, "Not an arXiv ID or DOI", "invalid_id", errors=[{
+                "field": "paper_id", "code": "invalid_id", "message": f"{pid!r} is neither an arXiv ID nor a DOI",
                 "hint": "Use e.g. 2403.01234 or hep-th/9901001 (or a p_<n> ID from an earlier answer)."}])
 
     @app.get("/v1/papers/search", tags=["papers"], responses=X.responses("papers_search", ("422",)))
@@ -611,9 +616,12 @@ def create_app(engine, session_ttl=24 * 3600, load_in_background=True, limits=No
                       limit: int = Query(20, ge=1, le=100, openapi_examples=X.param("papers_search", "limit")),
                       cursor: str = Query(None, pattern=r"^c_\d+$")):
         need_model()
-        items, nxt = engine.search_ids(q.strip(), limit, int(cursor[2:]) if cursor else 0)
-        return {"items": items, "next_cursor": f"c_{nxt}" if nxt is not None else None,
-                "notes": ["The index holds no titles yet: q matches the start of the arXiv ID."]}
+        q = T.normalise(q)
+        items, nxt, mode = gate.run(lambda: engine.search(q, limit, int(cursor[2:]) if cursor else 0))
+        note = ("q is read as an arXiv ID: papers whose ID starts with it." if mode == "id" else
+                "The index holds no titles yet: papers are ranked by how close their content is to q "
+                f"(at most {engine.SEARCH_MAX} results).")
+        return {"items": items, "next_cursor": f"c_{nxt}" if nxt is not None else None, "mode": mode, "notes": [note]}
 
     @app.get("/v1/papers/{paper_id:path}", tags=["papers"], responses=X.responses("paper", ("404", "422")))
     def paper(paper_id: Annotated[str, Path(openapi_examples=X.param("paper", "paper_id"))]):

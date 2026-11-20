@@ -1,5 +1,7 @@
 """The HTTP API (sci_jepa.api) end to end on the synthetic corpus with an untrained model (CPU, ~1 min).
 Checks shapes, the input checks and the error format, not answer quality."""
+import re
+
 import pytest
 
 pytest.importorskip("fastapi")
@@ -255,3 +257,30 @@ def test_docs_examples(client):
     body = X.ERRORS["400"][2]
     r = client.post("/v1/predict/forward", json=body)
     assert r.status_code == 400 and r.json()["errors"][0]["field"] == "parts"
+
+
+# ------------------------------------------------------------------ specification gaps closed (draft of 11 Nov 2026)
+def test_spec_info_models_and_ids(client):
+    info = client.get("/v1/info").json()
+    assert {"licence", "citation", "released"} <= set(info)
+    assert {"step", "seed"} <= set(info["checkpoint"]) and info["checkpoint"]["step"] > 0
+    assert {"papers", "years"} <= set(info["training_data"]) and info["training_data"]["papers"] > 0
+    m = client.get("/v1/models").json()["models"][0]
+    assert re.match(r"^\d{4}-\d{2}-\d{2}$", m["released"]) and m["checkpoint"] == info["checkpoint"]["step"]
+    r = client.get("/v1/papers/10.1103/PhysRevLett.116.061102")          # a valid DOI: not indexed, so 404
+    assert r.status_code == 404 and "DOI" in r.json()["title"]
+    assert client.get("/v1/papers/10.1103").json()["code"] == "invalid_id"
+
+
+def test_spec_gibberish_before_language(client):
+    r = client.post("/v1/ask", json={"text": "Asdkjh qwpoeiru zmxncb lkjhg. Lkjasd poiqwe mnbzxc qwerty asdfgh. "
+                                             "Zxcvbn mnbvcx lkjhgf."})
+    assert r.status_code == 422 and r.json()["code"] == "invalid_text"
+
+
+def test_spec_keyword_search(client):
+    b = client.get("/v1/papers/search", params={"q": "reaction yields from lab protocols", "limit": 3}).json()
+    assert b["mode"] == "content" and 1 <= len(b["items"]) <= 3
+    nxt = client.get("/v1/papers/search", params={"q": "reaction yields from lab protocols", "limit": 3,
+                                                   "cursor": b["next_cursor"]}).json()
+    assert {i["paper_id"] for i in nxt["items"]}.isdisjoint({i["paper_id"] for i in b["items"]})

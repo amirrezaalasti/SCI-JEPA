@@ -35,7 +35,7 @@ The interactive docs are at `/v1/docs`, and the OpenAPI file is at `/v1/openapi.
 | 3 Main flow | `POST /v1/ask`, `POST /v1/sessions/{id}/answers`, `GET`/`DELETE /v1/sessions/{id}` | done; sessions in memory |
 | 4 Building blocks | `POST /v1/parse`, `POST /v1/validate` | done |
 | 5 Tasks | `POST /v1/predict/{forward,inverse,abduction}`, `/v1/consistency`, `/v1/edit-check`, `/v1/intervention` | done |
-| 6 Papers | `GET /v1/papers/{id}`, `/v1/papers/search`, `/v1/kus/{id}`, `POST /v1/ask/paper` | done; search matches ID prefixes only (the index has no titles) |
+| 6 Papers | `GET /v1/papers/{id}`, `/v1/papers/search`, `/v1/kus/{id}`, `POST /v1/ask/paper` | done; the index has no titles or DOIs: `title` is null, search ranks papers by content (an arXiv ID prefix searches by ID), a valid DOI gets 404 |
 | 7 Input checks | format, content, PII | done; names are not yet detected as PII |
 | 1 Conventions | X-Request-Id, RFC 9457 errors, rate limits + `RateLimit-*` headers, `Idempotency-Key`, `X-Model-Id` | done (`guard.py`); per client address or bearer token |
 | 10 Service metrics | `GET /metrics` (Prometheus) | done: requests, latency, GPU queue, OOMs, CUDA memory |
@@ -104,4 +104,6 @@ Setup: R-GAT model `arxiv_full_M/BENCH/jepa+rgat_seed0` on one RTX 2080 Ti (`gpu
 - **Shortlist limits.** A paper with more than 24 KUs (`max_comp_per_paper`) is encoded from a fixed sample of 24, so its other KUs cannot be answers.
 - **Edit check without context.** Without `context`, `/v1/edit-check` reports how far apart the model puts the two findings (`margin` = 1 − cosine, separated at ≥ 0.02, a starting value). With `context` (problem, method, conditions), it uses the evaluation's rule: does the prediction prefer the original?
 - **Intervention scale.** `shift` is the distance between the predicted results before and after the change. It is scaled by the mean distance to the predicted results of 16 corpus papers.
+- **Model card fields.** `licence` and `citation` in `/v1/info` are null until set with `--licence` and `--citation` (or `SCIJEPA_API_LICENCE`, `SCIJEPA_API_CITATION`). `released` in `/v1/models` is the date of the weights file unless `--released` is given. `checkpoint` is the training step of the served weights.
+- **Names in user text.** Emails and phone numbers are removed; names are not (that needs a named-entity model).
 - **Thresholds.** The thresholds are the spec's starting values, except `problem.min_words`, which is 6 instead of 8 so that the spec's own examples pass.

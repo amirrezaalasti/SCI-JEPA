@@ -32,6 +32,9 @@ def main(argv=None):
     ap.add_argument("--session-ttl", type=int, default=24 * 3600, help="seconds before a session and its text are deleted")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
+    ap.add_argument("--licence", default=os.environ.get("SCIJEPA_API_LICENCE"), help="licence shown in /v1/info")
+    ap.add_argument("--citation", default=os.environ.get("SCIJEPA_API_CITATION"), help="citation shown in /v1/info")
+    ap.add_argument("--released", help="release date shown in /v1/models (default: date of the weights file)")
     g = ap.add_argument_group("robustness (sci_jepa/api/guard.py)")
     g.add_argument("--gpu-queue", type=int, default=16, help="requests waiting for the GPU before 503 overloaded")
     g.add_argument("--gpu-wait", type=float, default=30.0, help="seconds a request may wait for the GPU before 503")
@@ -54,7 +57,7 @@ def main(argv=None):
     log = logging.getLogger("sci_jepa.api")
     eng = Engine(a.model, weights=a.weights, device=a.device, index=a.index, cache_dir=a.cache_dir,
                  full_texts=a.full_texts, shortlist_papers=a.shortlist, neighbours=not a.no_neighbours,
-                 version=a.version, log=log.info)
+                 version=a.version, log=log.info, licence=a.licence, citation=a.citation, released=a.released)
     limits = Limits(max_body_bytes=a.max_body, gpu_queue=a.gpu_queue, gpu_wait_s=a.gpu_wait, rate_gpu=a.rate_gpu,
                     rate_read=a.rate_read, trust_proxy=a.trust_proxy, max_sessions=a.max_sessions,
                     exit_on_cuda_fault=a.exit_on_cuda_fault, cors_origins=tuple(a.cors_origin),

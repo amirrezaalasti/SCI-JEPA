@@ -28,6 +28,7 @@ import re
 import threading
 import time
 from collections import Counter
+from datetime import datetime, timezone
 
 import numpy as np
 import torch
@@ -89,12 +90,13 @@ def _minmax(x):
 class Engine:
     def __init__(self, model_dir, weights="model", device="auto", index="auto", cache_dir=None,
                  full_texts=False, shortlist_papers=64, neighbours=True, version="0.1.0",
-                 edit_threshold=0.02, warm_up=True, log=print):
+                 edit_threshold=0.02, warm_up=True, log=print, licence=None, citation=None, released=None):
         self.model_dir, self.weights, self.device = model_dir, weights, device
         self.index_spec, self.cache_dir, self.want_full_texts = index, cache_dir, full_texts
         self.shortlist_papers, self.neighbours = shortlist_papers, neighbours
         self.version, self.edit_threshold, self.log = version, edit_threshold, log
         self.warm = warm_up
+        self.licence, self.citation, self.released = licence, citation, released   # /v1/info and /v1/models
         self.jepa = self.gi = None
         self.V = self.mu = None
         self.comp_text = None
@@ -244,8 +246,29 @@ class Engine:
     def model_id(self):
         return f"sci-jepa-{self.version}"
 
+    def step(self):
+        """Training step of the served weights: the last step, or for `best` the step of the best epoch
+        (epochs are passes over the training KUs, so step = best_epoch / epochs * steps)."""
+        steps, epochs = self.raw_cfg.get("steps"), self.raw_cfg.get("epochs")
+        if not steps:
+            return None
+        best = self.summary.get("best_epoch")
+        if self.weights == "best" and best is not None and epochs:
+            return int(round(min(1.0, best / epochs) * steps))
+        return int(steps)
+
+    def seed(self):
+        seeds = self.raw_cfg.get("seeds") or []
+        return int(seeds[0]) if len(seeds) == 1 else self.raw_cfg.get("seed")
+
+    def released_on(self):
+        """--released, else the day the served weights file was written (UTC)."""
+        if self.released:
+            return self.released
+        return datetime.fromtimestamp(os.path.getmtime(self.weights_file), timezone.utc).strftime("%Y-%m-%d")
+
     def model_ref(self):
-        return {"id": self.model_id, "checkpoint": self.summary.get("best_epoch") if self.weights == "best" else "final",
+        return {"id": self.model_id, "checkpoint": self.step(),
                 "weights": self.weights, "sha256": self.weights_sha256[:16],
                 "data_version": os.path.basename(self.index_path)[:-3] if self.index_path else
                 ("synthetic" if self.gi is not None else None)}
@@ -260,13 +283,13 @@ class Engine:
                       "splits": {s: int(len(self.gi.papers(s))) for s in ("train", "val", "test")},
                       "full_texts": self.comp_text is not None}
         return {"name": "Sci-JEPA", "version": self.version, "model": self.model_ref(),
-                "checkpoint": {"weights": self.weights, "best_epoch": self.summary.get("best_epoch"),
-                               "sha256": self.weights_sha256},
+                "checkpoint": {"step": self.step(), "seed": self.seed(), "weights": self.weights,
+                               "best_epoch": self.summary.get("best_epoch"), "sha256": self.weights_sha256},
                 "architecture": {"encoder": self.cfg.encoder if hasattr(self.cfg, "encoder") else None,
                                  "text_encoder": self.raw_cfg.get("embed_model"), "feat_dim": self.cfg.feat_dim,
                                  "context_papers": self.cfg.n_subgraphs if self.jepa.gi is not None else 1},
                 "test_metrics": self.summary.get("test"),
-                "training_data": {"source": "Scientific-Summaries (LAION, CC-BY-4.0)"},
+                "training_data": self._training_data(),
                 "corpus": corpus, "language": ["en"], "tasks": list(T.TASKS),
                 "limitations": [
                     "Ranks published findings by fit; it does not check facts.",
@@ -274,7 +297,22 @@ class Engine:
                     "English only; trained on English papers, so other languages are not supported.",
                     "The text splitter of /v1/ask and /v1/parse is a cue-word placeholder; check `understood`.",
                     "BM25 is computed over the shortlisted papers, not the whole corpus."],
+                "licence": self.licence, "citation": self.citation, "released": self.released_on(),
                 "attribution": ATTRIBUTION}
+
+    def _training_data(self):
+        """Training papers and their years: the index's train split (a time split: train <= time_T)."""
+        out = {"source": "Scientific-Summaries (LAION, CC-BY-4.0)", "papers": None, "years": None,
+               "split": self.raw_cfg.get("split_mode")}
+        if self.gi is not None:
+            tr = np.asarray(self.gi.papers("train"))
+            out["papers"] = int(len(tr))
+            if len(tr):
+                y = np.asarray(self.gi.paper_year)[tr]
+                y = y[y > 0]
+                if len(y):
+                    out["years"] = f"{int(y.min())} to {int(y.max())}"
+        return out
 
     # ================================================================ corpus helpers
     def _need_index(self):
@@ -346,8 +384,23 @@ class Engine:
             k.pop("paper")
         return {**self.paper_meta(p), "knowledge_units": kus}
 
+    SEARCH_MAX = 1000                                    # keyword search pages through at most this many papers
+
+    def search(self, q, limit, cursor=0):
+        """An arXiv ID (or its start) -> papers by ID; any other text -> papers whose content is most similar
+        (the frozen text embedding against the paper vectors; the index holds no titles to match words in)."""
+        if re.match(r"^(\d{2,4}(\.\d{0,5})?(v\d*)?|[a-z\-]+(\.[A-Z]{2})?/\d{0,7}(v\d*)?)$", q):
+            items, nxt = self.search_ids(q, limit, cursor)
+            if items or cursor:
+                return items, nxt, "id"
+        k = min(cursor + limit + 1, self.SEARCH_MAX)
+        papers, _, _ = self.shortlist([q], k=k)
+        page = papers[cursor:cursor + limit]
+        more = len(papers) > cursor + limit and cursor + limit < self.SEARCH_MAX
+        return [self.paper_meta(p) for p in page], (cursor + limit if more else None), "content"
+
     def search_ids(self, q, limit, cursor=0):
-        """Papers whose arXiv ID starts with q (the index holds no titles), in ID order."""
+        """Papers whose arXiv ID starts with q, in ID order."""
         import bisect
         self._need_index()
         A = self._arxiv_sorted

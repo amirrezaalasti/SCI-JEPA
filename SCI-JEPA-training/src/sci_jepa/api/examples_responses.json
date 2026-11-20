@@ -30,12 +30,14 @@
    "version": "1.0.0",
    "model": {
     "id": "sci-jepa-1.0.0",
-    "checkpoint": 1,
+    "checkpoint": 331720,
     "weights": "best",
     "sha256": "43375a5b7a4e8d61",
     "data_version": "paper_a_ku_index_b40bd0e47bd9"
    },
    "checkpoint": {
+    "step": 331720,
+    "seed": 1,
     "weights": "best",
     "best_epoch": 1,
     "sha256": "43375a5b7a4e8d6126e6a2890aae6300c4c5ecc15a509e8fd4fd3e3a398ad233"
@@ -135,7 +137,10 @@
     }
    },
    "training_data": {
-    "source": "Scientific-Summaries (LAION, CC-BY-4.0)"
+    "source": "Scientific-Summaries (LAION, CC-BY-4.0)",
+    "papers": 1966075,
+    "years": "1901 to 2023",
+    "split": "time"
    },
    "corpus": {
     "papers": 2066075,
@@ -178,6 +183,9 @@
     "The text splitter of /v1/ask and /v1/parse is a cue-word placeholder; check `understood`.",
     "BM25 is computed over the shortlisted papers, not the whole corpus."
    ],
+   "licence": null,
+   "citation": null,
+   "released": "2026-11-03",
    "attribution": "Knowledge units from Scientific-Summaries (LAION, CC-BY-4.0); original papers on arXiv."
   }
  },
@@ -187,6 +195,8 @@
     {
      "id": "sci-jepa-1.0.0",
      "default": true,
+     "released": "2026-11-03",
+     "checkpoint": 331720,
      "weights": "best",
      "sha256": "43375a5b7a4e8d61"
     }
@@ -292,8 +302,8 @@
  "ask": {
   "complete": {
    "status": "ok",
-   "session": "ses_ZOWhvzrN4VmYPWbb",
-   "expires_at": "2026-11-21T15:21:40Z",
+   "session": "ses_Wp8J0ROBbdE3V-xY",
+   "expires_at": "2026-11-21T15:40:47Z",
    "task": "forward",
    "understood": [
     {
@@ -374,7 +384,7 @@
    ],
    "model": {
     "id": "sci-jepa-1.0.0",
-    "checkpoint": 1,
+    "checkpoint": 331720,
     "weights": "best",
     "sha256": "43375a5b7a4e8d61",
     "data_version": "paper_a_ku_index_b40bd0e47bd9"
@@ -383,8 +393,8 @@
   },
   "need_more": {
    "status": "need_more",
-   "session": "ses_-UTGIW_rf4TroFeb",
-   "expires_at": "2026-11-21T15:21:40Z",
+   "session": "ses_kKaIttuTQGMk6S7H",
+   "expires_at": "2026-11-21T15:40:48Z",
    "task": "forward",
    "understood": [
     {
@@ -595,7 +605,7 @@
    ],
    "model": {
     "id": "sci-jepa-1.0.0",
-    "checkpoint": 1,
+    "checkpoint": 331720,
     "weights": "best",
     "sha256": "43375a5b7a4e8d61",
     "data_version": "paper_a_ku_index_b40bd0e47bd9"
@@ -691,7 +701,7 @@
    ],
    "model": {
     "id": "sci-jepa-1.0.0",
-    "checkpoint": 1,
+    "checkpoint": 331720,
     "weights": "best",
     "sha256": "43375a5b7a4e8d61",
     "data_version": "paper_a_ku_index_b40bd0e47bd9"
@@ -789,7 +799,7 @@
    ],
    "model": {
     "id": "sci-jepa-1.0.0",
-    "checkpoint": 1,
+    "checkpoint": 331720,
     "weights": "best",
     "sha256": "43375a5b7a4e8d61",
     "data_version": "paper_a_ku_index_b40bd0e47bd9"
@@ -887,7 +897,7 @@
    ],
    "model": {
     "id": "sci-jepa-1.0.0",
-    "checkpoint": 1,
+    "checkpoint": 331720,
     "weights": "best",
     "sha256": "43375a5b7a4e8d61",
     "data_version": "paper_a_ku_index_b40bd0e47bd9"
@@ -948,7 +958,7 @@
    ],
    "model": {
     "id": "sci-jepa-1.0.0",
-    "checkpoint": 1,
+    "checkpoint": 331720,
     "weights": "best",
     "sha256": "43375a5b7a4e8d61",
     "data_version": "paper_a_ku_index_b40bd0e47bd9"
@@ -970,7 +980,7 @@
    ],
    "model": {
     "id": "sci-jepa-1.0.0",
-    "checkpoint": 1,
+    "checkpoint": 331720,
     "weights": "best",
     "sha256": "43375a5b7a4e8d61",
     "data_version": "paper_a_ku_index_b40bd0e47bd9"
@@ -1096,7 +1106,7 @@
    ],
    "model": {
     "id": "sci-jepa-1.0.0",
-    "checkpoint": 1,
+    "checkpoint": 331720,
     "weights": "best",
     "sha256": "43375a5b7a4e8d61",
     "data_version": "paper_a_ku_index_b40bd0e47bd9"
@@ -1108,36 +1118,37 @@
   "default": {
    "items": [
     {
-     "paper_id": "2403.00006",
-     "arxiv_id": "2403.00006",
+     "paper_id": "2007.04275",
+     "arxiv_id": "2007.04275",
      "title": null,
-     "year": 2024,
-     "field": "Economics & Finance",
-     "subfield": "Quantitative Finance",
-     "split": "val"
+     "year": 2020,
+     "field": "Computer Science",
+     "subfield": "Computer Science",
+     "split": "train"
     },
     {
-     "paper_id": "2403.00015",
-     "arxiv_id": "2403.00015",
+     "paper_id": "1812.09441",
+     "arxiv_id": "1812.09441",
      "title": null,
-     "year": 2024,
-     "field": "Physics",
-     "subfield": "Condensed Matter Physics",
-     "split": "val"
+     "year": 2018,
+     "field": "Chemistry",
+     "subfield": "Chemistry",
+     "split": "train"
     },
     {
-     "paper_id": "2403.00019",
-     "arxiv_id": "2403.00019",
+     "paper_id": "p_2061017",
+     "arxiv_id": null,
      "title": null,
-     "year": 2024,
-     "field": "Statistics",
-     "subfield": "Statistics",
-     "split": "val"
+     "year": 2025,
+     "field": "Chemistry",
+     "subfield": "Chemistry",
+     "split": "test"
     }
    ],
    "next_cursor": "c_3",
+   "mode": "content",
    "notes": [
-    "The index holds no titles yet: q matches the start of the arXiv ID."
+    "The index holds no titles yet: papers are ranked by how close their content is to q (at most 1000 results)."
    ]
   }
  },
@@ -1415,7 +1426,7 @@
    ],
    "model": {
     "id": "sci-jepa-1.0.0",
-    "checkpoint": 1,
+    "checkpoint": 331720,
     "weights": "best",
     "sha256": "43375a5b7a4e8d61",
     "data_version": "paper_a_ku_index_b40bd0e47bd9"
@@ -1426,8 +1437,8 @@
  "session_answers": {
   "conditions": {
    "status": "ok",
-   "session": "ses_GFAEbN5qRqxkxLaS",
-   "expires_at": "2026-11-21T15:21:46Z",
+   "session": "ses_sX2g61Hys59_AqcO",
+   "expires_at": "2026-11-21T15:40:55Z",
    "task": "forward",
    "understood": [
     {
@@ -1507,7 +1518,7 @@
    ],
    "model": {
     "id": "sci-jepa-1.0.0",
-    "checkpoint": 1,
+    "checkpoint": 331720,
     "weights": "best",
     "sha256": "43375a5b7a4e8d61",
     "data_version": "paper_a_ku_index_b40bd0e47bd9"
@@ -1517,8 +1528,8 @@
  },
  "session_get": {
   "default": {
-   "session": "ses_2eVzQ9jSX2E9_oXa",
-   "expires_at": "2026-11-21T15:21:46Z",
+   "session": "ses_hlNm5hVIYN4lvxNP",
+   "expires_at": "2026-11-21T15:40:56Z",
    "task": "forward",
    "understood": [
     {
@@ -1542,8 +1553,8 @@
    ],
    "last": {
     "status": "need_more",
-    "session": "ses_2eVzQ9jSX2E9_oXa",
-    "expires_at": "2026-11-21T15:21:46Z",
+    "session": "ses_hlNm5hVIYN4lvxNP",
+    "expires_at": "2026-11-21T15:40:56Z",
     "task": "forward",
     "understood": [
      {
@@ -1575,7 +1586,7 @@
    "title": "The request is not valid",
    "status": 400,
    "instance": "/v1/predict/forward",
-   "request_id": "req_482ff9ab3e4c4a6a",
+   "request_id": "req_e86977f63fd9456a",
    "code": "invalid_request",
    "errors": [
     {
@@ -1609,7 +1620,7 @@
    "title": "The input is incomplete or too vague",
    "status": 422,
    "instance": "/v1/predict/forward",
-   "request_id": "req_f499cbe4a67844e5",
+   "request_id": "req_c01dd529cf244a43",
    "code": "too_vague",
    "errors": [
     {
@@ -1625,7 +1636,7 @@
    "title": "reveal_truth is allowed only for validation papers",
    "status": 403,
    "instance": "/v1/ask/paper",
-   "request_id": "req_1d0a5f0846fd4926",
+   "request_id": "req_245c9cf3e92a4b1b",
    "code": "reveal_not_allowed",
    "detail": "2210.12843 is a train paper; test papers stay hidden until the review of the accompanying paper is complete."
   },
@@ -1634,7 +1645,7 @@
    "title": "Not found",
    "status": 404,
    "instance": "/v1/sessions/ses_doesnotexist",
-   "request_id": "req_343e590a1bf1475b",
+   "request_id": "req_174efad54dd54f28",
    "code": "not_found",
    "detail": "'ses_doesnotexist' does not exist or expired"
   }

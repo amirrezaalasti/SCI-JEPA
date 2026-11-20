@@ -15,6 +15,7 @@ import argparse
 import json
 import sys
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -31,12 +32,19 @@ def local_openapi():
 def call(base, method, path, query=None, body=None, timeout=300):
     url = base.rstrip("/") + path + ("?" + urllib.parse.urlencode(query) if query else "")
     data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(url, data=data, method=method, headers={"Content-Type": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            raw, status = r.read(), r.status
-    except urllib.error.HTTPError as e:
-        raw, status = e.read(), e.code
+    for _ in range(5):                                   # wait out the server's rate limit (429 + Retry-After)
+        req = urllib.request.Request(url, data=data, method=method, headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                raw, status = r.read(), r.status
+        except urllib.error.HTTPError as e:
+            raw, status = e.read(), e.code
+            if status == 429:
+                wait = int(e.headers.get("Retry-After", "10")) + 1
+                print(f"     rate limited, waiting {wait} s")
+                time.sleep(wait)
+                continue
+        break
     return status, (json.loads(raw) if raw else None)
 
 

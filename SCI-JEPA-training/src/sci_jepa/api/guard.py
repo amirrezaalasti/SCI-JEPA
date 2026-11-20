@@ -174,6 +174,8 @@ def bucket_of(method, path):
     if method == "POST" and (path.startswith(GPU_ROUTES) or (path.startswith("/v1/sessions/")
                                                             and path.endswith("/answers"))):
         return "gpu"
+    if method == "GET" and path == "/v1/papers/search":   # keyword search runs the text encoder
+        return "gpu"
     return "read"
 
 

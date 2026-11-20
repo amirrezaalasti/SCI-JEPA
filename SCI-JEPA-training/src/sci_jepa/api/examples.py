@@ -103,7 +103,7 @@ ERRORS = {
 # GET endpoints: path or query parameters of the documented call.
 PARAMS = {
     "health": {}, "ready": {}, "info": {}, "models": {}, "tasks": {},
-    "papers_search": {"q": "2403", "limit": 3},
+    "papers_search": {"q": "graph neural networks for chemical reaction yield prediction", "limit": 3},
     "paper": {"paper_id": "2403.00015"},
     "ku": {"ku_id": "ku_17441711"},
 }
