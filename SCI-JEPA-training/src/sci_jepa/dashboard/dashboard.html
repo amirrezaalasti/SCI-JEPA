@@ -13,7 +13,7 @@
 header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
 h1{font-size:17px;margin:0;margin-right:auto;white-space:nowrap}select,button,input{font:inherit;padding:5px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--text)}
 label{display:inline-flex;gap:4px;align-items:center;max-width:100%}select{max-width:100%;min-width:0}
-.badge{padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;color:#fff;background:var(--muted)}.badge.running{background:var(--accent)}.badge.done{background:var(--good)}.badge.failed{background:var(--bad)}
+.badge{padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;color:#fff;background:var(--muted)}.badge.running{background:var(--accent)}.badge.done{background:var(--good)}.badge.failed{background:var(--bad)}.badge.stopped,.badge.stale{background:var(--warn)}
 .progress{width:160px;height:8px;background:var(--line);border-radius:4px;overflow:hidden}.progress>div{height:100%;background:var(--accent);width:0}
 /* app shell: slim top bar, side panel (left or right), content */
 #app{display:flex;align-items:flex-start;min-height:calc(100vh - var(--hdr,53px))}
@@ -296,10 +296,21 @@ function vlines(ymin,ymax){   // epoch boundaries + sequential phase ends ("·" 
 }
 const maxOf=(rows,keys)=>Math.max(1e-6,...rows.flatMap(r=>keys.map(k=>+r[k]||0)));
 
+// A run's status for display. live.json says "running" until training writes done / failed / stopped; a job killed
+// without warning (SIGKILL, node failure, out of memory) never does, so a "running" file not updated for
+// STALE_MIN minutes is shown as "stale". updated_ts (seconds since the epoch) avoids time-zone guessing;
+// older files only have the cluster's local time string.
+const STALE_MIN=60;
+function runStatus(d){
+  const st=String((d&&d.status)||"");if(!st.startsWith("running"))return st;
+  const t=d.updated_ts?d.updated_ts*1000:Date.parse(String(d.updated||"").replace(" ","T"));
+  return isFinite(t)&&Date.now()-t>STALE_MIN*60e3?`stale: no update since ${d.updated} (job ended without reporting)`:st;
+}
+
 // ---------------------------------------------------------------- render
 function render(){
   const D=DATA;if(!D)return;const H=D.history||[],E=D.evals||[],F=D.final||{};
-  const st=D.status||"";$("badge").textContent=st.split(":")[0];$("badge").className="badge "+(st.startsWith("fail")?"failed":st);
+  const st=runStatus(D);$("badge").textContent=st.split(":")[0];$("badge").title=st;$("badge").className="badge "+(st.startsWith("fail")?"failed":st.split(":")[0]);
   const h=H[H.length-1]||{},s=H.length?h.step+1:0;$("prog").style.width=(100*s/(D.steps_total||1))+"%";
   $("stepinfo").textContent=`step ${s}/${D.steps_total}`+(D.epochs_total?` · epoch ${fmt(h.epoch||0,2)}/${fmt(D.epochs_total,2)}`:"")+(h.phase&&h.phase!=="mixed"?` · masking: ${h.phase}`:"")+` · ${D.updated||""}`;
   ({overview,explain:explainTab,train:training,val:validation,epochs:epochsTab,tasks:tasksTab,world:worldTab,neurons:neuronsTab,where,examples,graphs}[tab]||(()=>{}))(D,H,E,F);
@@ -777,8 +788,8 @@ async function runsTab(force){
     const H=d.history||[],E=d.evals||[],h=H[H.length-1]||{},e=E[E.length-1]||{},F=d.final||{},rb=F.retrieval_balanced||{},nl=(d.neuron_timeline||[]).slice(-1)[0];
     const L=nl?nl.layers[nl.layers.length-1]:null,idp=L?L.counts.identity/ncount(L):null;
     const r=e.bal_MRR/(e.bal_chance||1);const verdict=e.bal_MRR==null?"–":r>2?'<span class="ok">learning</span>':r>1.3?'<span class="wa">weak</span>':(h.cos_pred_target>0.95?'<span class="no">shortcut (cos≈1, MRR≈chance)</span>':'<span class="no">at chance</span>');
-    const prog=h.step!=null?Math.round(100*(h.step+1)/(d.steps_total||1)):0,stt=String(d.status).split(":")[0];
-    return `<tr><td><a href="#" data-run="${esc((RUNS.find(r=>ALL[r.path]===d)||{}).path||`runs/${d.name}/live.json`)}">${esc(d.name)}</a></td><td><span class="badge ${stt}">${esc(stt)}</span></td><td style="white-space:nowrap">${runModel(d)}</td><td style="white-space:nowrap">${gpuCell(runGpu(d).name?runGpu(d):null)}</td>`+
+    const prog=h.step!=null?Math.round(100*(h.step+1)/(d.steps_total||1)):0,stt=runStatus(d).split(":")[0];
+    return `<tr><td><a href="#" data-run="${esc((RUNS.find(r=>ALL[r.path]===d)||{}).path||`runs/${d.name}/live.json`)}">${esc(d.name)}</a></td><td><span class="badge ${stt}" title="${esc(runStatus(d))}">${esc(stt)}</span></td><td style="white-space:nowrap">${runModel(d)}</td><td style="white-space:nowrap">${gpuCell(runGpu(d).name?runGpu(d):null)}</td>`+
       `<td class="num">${big(F.params_trainable||d.params_trainable||null)}</td><td class="num">${runPapers(d)}</td><td class="num">${big((d.index||{}).kus)}</td><td class="num" title="${F.samples_seen?"seen":"planned: steps × batch size"}">${big(F.samples_seen||(d.steps_total&&d.config.batch_size?d.steps_total*d.config.batch_size:null))}</td><td class="num">${prog}%</td><td class="num">${fmt(h.epoch,2)}${d.epochs_total?"/"+fmt(d.epochs_total,2):""}</td><td>${MODE_NAME[d.config.ku_mode]||"sections"}</td><td>${esc((d.schedule||{}).schedule||"")}${h.phase&&h.phase!=="mixed"?" · "+esc(h.phase):""}</td><td class="num">${d.config.n_subgraphs}</td><td class="num">${fmt(h.jepa,4)}</td><td class="num">${fmt(h.cos_pred_target,3)}</td><td class="num">${fmt(e.bal_MRR)}</td><td class="num">${fmt(e.bal_chance)}</td><td class="num">${fmt(e.probe_acc,2)}</td><td class="num">${pct(idp)}</td><td class="num">${nl?nl.pred_learned+"/"+nl.pred_n:"–"}</td><td class="num">${fmt(rb.MRR)}</td><td>${verdict}</td></tr>`;}).join("");
   $("runs-table").querySelectorAll("a[data-run]").forEach(a=>a.onclick=ev=>{ev.preventDefault();$("follow").checked=false;selectRun(a.dataset.run);tab="overview";showTab(true);});
   ptTable(ok);epochMatrix(ok);taskMatrix(ok);
@@ -1037,7 +1048,7 @@ async function benchTab(force){
   const E=sel.value,FAM=$("bench-fam").value,runs=D.filter(d=>d.experiment===E),arms=[...new Set(runs.map(d=>d.arm))];
   const allRows=arms.map(a=>{const rs=runs.filter(d=>d.arm===a),fin=rs.filter(d=>String(d.status).startsWith("done"));
     const vals={};[...BCOLS,...RCOLS].forEach(([k,,f])=>vals[k]=mstd(fin.map(f)));
-    return {arm:a,n:rs.length,done:fin.length,running:rs.filter(d=>String(d.status).startsWith("running")),vals,runs:fin,base:rs.some(d=>d.config.baseline||d.arm==="text_baseline"),fam:famOf(rs[0])};});
+    return {arm:a,n:rs.length,done:fin.length,running:rs.filter(d=>runStatus(d).startsWith("running")),vals,runs:fin,base:rs.some(d=>d.config.baseline||d.arm==="text_baseline"),fam:famOf(rs[0])};});
   const rows=allRows.filter(r=>!FAM||r.fam===FAM||(r.arm==="text_baseline"||r.arm.endsWith("__text_baseline")));
   rows.sort((a,b)=>(b.vals.test[0]??-1)-(a.vals.test[0]??-1));
   const ref=rows.find(r=>r.arm==="reference"||r.arm==="BENCH__reference"),bl=rows.find(r=>r.arm==="text_baseline"||r.arm.endsWith("__text_baseline"))||rows.find(r=>r.base);
@@ -1199,7 +1210,7 @@ async function compareTab(force){
   if(!A||!B){$("cmp-head").innerHTML='<div class="empty">Need at least one run.</div>';return;}
   const useTest=$("cmpSrc").value==="best"&&(A.final||{}).retrieval_balanced&&(B.final||{}).retrieval_balanced;
   const VA=cmpVals(A,useTest),VB=cmpVals(B,useTest),keys=[...new Set([...Object.keys(VA),...Object.keys(VB)])];
-  const nm=d=>`${d.name} <span class="muted">(${MODE_NAME[d.config.ku_mode]||d.config.ku_mode}${d.status&&!String(d.status).startsWith("done")?", "+String(d.status).split(":")[0]:""})</span>`;
+  const nm=d=>`${d.name} <span class="muted">(${MODE_NAME[d.config.ku_mode]||d.config.ku_mode}${d.status&&!String(d.status).startsWith("done")?", "+runStatus(d).split(":")[0]:""})</span>`;
   // headline in plain words
   const tk=keys.filter(k=>k.startsWith("t_")&&k!=="t_shift"),winsB=[],winsA=[];
   for(const k of tk){const w=cmpWinner(VA[k]&&VA[k].v,VB[k]&&VB[k].v,(VA[k]||VB[k]).kind);if(w>0)winsB.push((VB[k]||VA[k]).label);else if(w<0)winsA.push((VA[k]||VB[k]).label);}

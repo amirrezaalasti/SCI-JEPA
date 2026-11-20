@@ -27,6 +27,7 @@ COMMANDS = {
     "figures":      ("sci_jepa.reporting.figures",       "paper figures and leaderboard tables for a finished experiment"),
     "report":       ("sci_jepa.reporting.report_pdf",    "PDF report for a finished experiment"),
     "serve":        ("sci_jepa.dashboard.serve",         "serve a results folder's dashboard: sci-jepa serve <dashboard dir> [port]"),
+    "api":          ("sci_jepa.api",                     "serve a trained model as the HTTP API (FastAPI): sci-jepa api --model <folder>"),
 }
 
 

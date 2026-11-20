@@ -18,11 +18,13 @@ mean / std per metric and paired t-tests against the reference arm.
 """
 import argparse
 import ast
+import contextlib
 import io
 import json
 import math
 import os
 import pickle
+import signal
 import threading
 import time
 
@@ -567,9 +569,53 @@ def train_one(cfg, gi, seed, log=print, live=None, save_dir=None, ckpt_path=None
     cfg.keep_ckpts (with save_dir): the weights at that many evenly spaced steps are kept in save_dir/checkpoints/
     (keep_steps); a resumed run writes the ones still ahead of it."""
     try:
-        return _train_one(cfg, gi, seed, log, live, save_dir, ckpt_path)
+        with _reports_end(live):                       # dashboard: a run that ends early must not stay "running"
+            return _train_one(cfg, gi, seed, log, live, save_dir, ckpt_path)
     finally:                                           # the last checkpoint is on disk before the caller goes on
         _WRITER.join()
+
+
+@contextlib.contextmanager
+def _reports_end(live):
+    """Around one run with a dashboard LiveRun: SIGTERM is raised as _Stopped, and a run that ends with an
+    exception is marked "stopped: ..." (SIGTERM, Ctrl-C: resumable) or "failed: ...", then the exception goes on."""
+    prev = _stop_on_sigterm()
+    try:
+        yield
+    except BaseException as e:
+        if live is not None and not str(live.state.get("status", "")).startswith("done"):
+            try:
+                if isinstance(e, (_Stopped, KeyboardInterrupt)):
+                    live.fail(f"{type(e).__name__} at step {_last_step(live)}", status="stopped")
+                else:
+                    live.fail(f"{type(e).__name__}: {e}"[:300])
+            except Exception:                          # noqa: BLE001  (telemetry never hides the real error)
+                pass
+        raise
+    finally:
+        if prev is not None:
+            signal.signal(signal.SIGTERM, prev)
+
+
+class _Stopped(SystemExit):
+    """SIGTERM (SLURM time limit, scancel, preemption) raised as an exception on the training thread, so the
+    dashboard marks the run "stopped" and the checkpoint being written finishes before the process exits."""
+
+
+def _stop_on_sigterm():
+    """Install the SIGTERM -> _Stopped handler; returns the previous handler (None off the main thread, where
+    Python cannot install one: the default kill stays and the dashboard falls back to its staleness check)."""
+    if threading.current_thread() is not threading.main_thread():
+        return None
+
+    def handler(signum, frame):
+        raise _Stopped(128 + signum)
+    return signal.signal(signal.SIGTERM, handler)
+
+
+def _last_step(live):
+    h = live.state.get("history") or []
+    return h[-1].get("step") if h and isinstance(h[-1], dict) else None
 
 
 def _train_one(cfg, gi, seed, log, live, save_dir, ckpt_path):
@@ -1130,10 +1176,11 @@ def run_experiment(cfg, gi, exp=None, arms=None, log=print, live_root=None, resu
                                       "family": method_family(over), "overrides": {k: str(v) for k, v in over.items()}})
             if acfg.baseline:                            # BENCH: a no-training reference row
                 from sci_jepa.evaluation.baselines import run_isolated, text_baseline
-                if acfg.baseline == "llm" and not acfg.synthetic:   # own process: GPU memory fully isolated
-                    m = run_isolated(acfg, "test", seed=1234 + seed)
-                else:
-                    m = text_baseline(acfg, gi, "test", seed=1234 + seed)
+                with _reports_end(live):
+                    if acfg.baseline == "llm" and not acfg.synthetic:   # own process: GPU memory fully isolated
+                        m = run_isolated(acfg, "test", seed=1234 + seed)
+                    else:
+                        m = text_baseline(acfg, gi, "test", seed=1234 + seed)
                 if live is not None:
                     live.state["steps_total"] = 0
                     live.finish(m)

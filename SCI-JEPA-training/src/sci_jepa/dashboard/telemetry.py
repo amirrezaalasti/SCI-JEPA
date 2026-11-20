@@ -102,6 +102,7 @@ class LiveRun:
 
     def _write(self):
         self.state["updated"] = time.strftime("%Y-%m-%d %H:%M:%S")
+        self.state["updated_ts"] = round(time.time())     # dashboard: a "running" run not updated for long is stale
         _atomic_dump(self.state, self.path)
 
     # ------------------------------------------------------------------
@@ -184,6 +185,7 @@ class LiveRun:
                                                      "gpu": self.state.get("gpu")})
         self._write()
 
-    def fail(self, err):
-        self.state["status"] = f"failed: {err}"
+    def fail(self, err, status="failed"):
+        """status "failed" (an exception) or "stopped" (SIGTERM / Ctrl-C: resumable from the last checkpoint)."""
+        self.state["status"] = f"{status}: {err}"
         self._write()
