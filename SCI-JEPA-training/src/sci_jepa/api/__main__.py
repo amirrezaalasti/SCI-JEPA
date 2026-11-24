@@ -11,6 +11,10 @@ computes one vector per paper in a single pass over the KU vectors and caches it
 (or in --cache-dir); later starts read the cache. /v1/ready answers 503 until everything is loaded.
 
 Interactive docs: http://<host>:<port>/v1/docs
+
+Call log: with --dashboard <folder> (e.g. <results>/dashboard), every call with its request and answer is
+written there for the dashboard's "API calls" tab (apicalls.html; sci_jepa/api/calllog.py), and pushed to the
+hosted dashboard when SCIJEPA_PUSH_URL and SCIJEPA_PUSH_TOKEN are set. --dashboard-port also serves the folder.
 """
 import argparse
 import logging
@@ -47,10 +51,21 @@ def main(argv=None):
     g.add_argument("--cors-origin", action="append", default=[], help="allowed browser origin (repeatable)")
     g.add_argument("--exit-on-cuda-fault", action="store_true",
                    help="exit with code 3 after a CUDA fault so a supervisor (the sbatch loop) restarts the server")
+    c = ap.add_argument_group("call log (sci_jepa/api/calllog.py, dashboard: API calls)")
+    c.add_argument("--dashboard", default=os.environ.get("SCIJEPA_API_DASHBOARD"),
+                   help="dashboard folder the call log is written to (env SCIJEPA_API_DASHBOARD; default: memory only)")
+    c.add_argument("--dashboard-port", type=int, default=None,
+                   help="also serve the dashboard folder on 127.0.0.1:<port> (default: not served)")
+    c.add_argument("--call-log-redact", default="full", choices=["full", "pii", "meta"],
+                   help="full: bodies as sent; pii: emails and phone numbers removed; meta: no bodies")
+    c.add_argument("--call-log-days", type=int, default=30, help="days of JSONL call history kept (0 = forever)")
+    c.add_argument("--call-log-keep", type=int, default=300, help="latest calls shown on the dashboard")
     a = ap.parse_args(argv)
 
     import uvicorn
+    from sci_jepa.api import textparts
     from sci_jepa.api.app import create_app
+    from sci_jepa.api.calllog import CallLog
     from sci_jepa.api.engine import Engine
     from sci_jepa.api.guard import Limits
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -62,9 +77,22 @@ def main(argv=None):
                     rate_read=a.rate_read, trust_proxy=a.trust_proxy, max_sessions=a.max_sessions,
                     exit_on_cuda_fault=a.exit_on_cuda_fault, cors_origins=tuple(a.cors_origin),
                     idempotency_ttl_s=a.session_ttl)
+    calls = None
+    if a.dashboard:
+        from sci_jepa.dashboard.push import start_autopush
+        from sci_jepa.dashboard.serve import setup_dashboard, start_server
+        setup_dashboard(a.dashboard)
+        calls = CallLog(a.dashboard, host=a.host if a.host not in ("0.0.0.0", "::") else None, port=a.port,
+                        keep=a.call_log_keep, redact=a.call_log_redact, days=a.call_log_days,
+                        scrub=textparts.scrub_pii, log=log.warning,
+                        server={"model": a.model, "weights": a.weights, "index": a.index, "version": a.version})
+        log.info("call log: %s/apicalls (redact=%s)", a.dashboard, a.call_log_redact)
+        if a.dashboard_port:
+            log.info("dashboard: %sapicalls.html", start_server(a.dashboard, a.dashboard_port))
+        start_autopush(a.dashboard)                      # hosted dashboard, if SCIJEPA_PUSH_URL/TOKEN are set
     # One worker process: the model and its GPU memory exist once. limit_concurrency makes uvicorn itself answer
     # 503 when far more connections are open than the GPU queue can take; idle keep-alive connections close fast.
-    uvicorn.run(create_app(eng, session_ttl=a.session_ttl, limits=limits), host=a.host, port=a.port,
+    uvicorn.run(create_app(eng, session_ttl=a.session_ttl, limits=limits, call_log=calls), host=a.host, port=a.port,
                 log_level="info", workers=1, limit_concurrency=max(64, 4 * a.gpu_queue), timeout_keep_alive=5,
                 timeout_graceful_shutdown=30, proxy_headers=a.trust_proxy,
                 forwarded_allow_ips="*" if a.trust_proxy else None)

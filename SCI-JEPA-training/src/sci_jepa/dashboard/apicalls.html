@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>API calls</title>
+<style>
+/* Same palette as the training dashboard. Call log of the Sci-JEPA API (sci_jepa/api/calllog.py): every request and
+   its answer. Files: apicalls/servers.json (index) and apicalls/servers/<host>-<port>.json (one per server). */
+:root{--bg:#f6f6f3;--panel:#fff;--text:#18181b;--muted:#6b6b70;--line:#e2e2de;--accent:#2563eb;--good:#16a34a;--bad:#dc2626;--warn:#d97706;--soft:#f1f1ee;--code:#f7f7f4;--sel:#eef3fe}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111113;--panel:#1b1b1f;--text:#ececef;--muted:#a1a1aa;--line:#2e2e33;--accent:#60a5fa;--soft:#232328;--code:#151518;--sel:#1e2a3d}}
+:root[data-theme="dark"]{--bg:#111113;--panel:#1b1b1f;--text:#ececef;--muted:#a1a1aa;--line:#2e2e33;--accent:#60a5fa;--soft:#232328;--code:#151518;--sel:#1e2a3d}
+*{box-sizing:border-box}
+body{margin:0;padding:14px 16px 32px;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+h1{font-size:18px;margin:0 0 4px}h2{font-size:15px;margin:18px 0 6px}.muted{color:var(--muted)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:12px 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
+.card b{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+.card span{font-size:18px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.card small{display:block;color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+.tblwrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:top}
+th{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);position:sticky;top:0;background:var(--panel)}
+tr:last-child td{border-bottom:0}
+#calls tbody tr{cursor:pointer}#calls tbody tr:hover{background:var(--soft)}#calls tbody tr.on{background:var(--sel)}
+td.sum{white-space:normal;min-width:240px;max-width:460px;color:var(--muted);font-size:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:12px}
+.chart{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px;height:230px;min-width:0}
+.chart h3{margin:0 0 4px;font-size:13px}.chart canvas{height:185px!important}
+.pill{display:inline-block;padding:0 7px;border-radius:999px;font-size:12px;background:var(--soft);font-weight:600}
+.s2{color:var(--good)}.s3{color:var(--accent)}.s4{color:var(--warn)}.s5{color:var(--bad)}
+.m{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0}
+.bar input[type=search]{flex:1 1 240px;min-width:0}
+input,select,button{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:4px 8px}
+button{cursor:pointer}button:hover{border-color:var(--accent)}
+label.chk{display:inline-flex;gap:5px;align-items:center;color:var(--muted);font-size:13px}
+.split{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:12px;align-items:start}
+@media (max-width:1000px){.split{grid-template-columns:minmax(0,1fr)}}
+#calls-wrap{max-height:70vh;overflow:auto}
+#detail{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;position:sticky;top:8px;max-height:calc(100vh - 16px);overflow:auto;min-width:0}
+#detail h3{margin:0 0 2px;font-size:14px;overflow-wrap:anywhere}
+#detail details{margin:8px 0;border-top:1px solid var(--line);padding-top:6px}
+#detail summary{cursor:pointer;font-weight:600;font-size:13px}
+#detail summary small{font-weight:400;color:var(--muted)}
+pre{background:var(--code);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:6px 0;overflow:auto;max-height:420px;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
+.kv{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:2px 12px;font-size:13px;margin:6px 0}
+.kv b{color:var(--muted);font-weight:500}.kv span{overflow-wrap:anywhere}
+.tools{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.note{font-size:12px;color:var(--muted);margin-top:12px}
+#err{color:var(--bad)}
+.jk{color:var(--accent)}.js{color:var(--good)}.jn{color:var(--warn)}.jb{color:#9333ea}
+</style>
+<script src="vendor/chart.umd.min.js"></script>
+</head><body>
+<h1>API calls <span class="muted" style="font-weight:400">· live, every request and its answer</span></h1>
+<div class="bar" style="margin:4px 0">
+ <label class="muted">Server <select id="server"></select></label>
+ <span class="muted" id="sum">waiting for apicalls/ …</span>
+</div>
+<div id="err"></div>
+<div class="cards" id="cards"></div>
+<div class="grid">
+ <div class="chart"><h3>Calls per minute (last 3 hours)</h3><canvas id="c-rate"></canvas></div>
+ <div class="chart"><h3>Mean latency per minute (ms)</h3><canvas id="c-lat"></canvas></div>
+</div>
+<h2>Endpoints <span class="muted" style="font-weight:400;font-size:13px">· since the server started</span></h2>
+<div class="tblwrap"><table id="routes"><thead><tr><th>Endpoint</th><th>Calls</th><th>Errors</th><th>Error rate</th><th>Mean</th><th>Max</th></tr></thead><tbody></tbody></table></div>
+<h2>Calls</h2>
+<div class="bar">
+ <input type="search" id="q" placeholder="search request ID, path, client, any text in the request or answer">
+ <select id="f-route"><option value="">all endpoints</option></select>
+ <select id="f-status"><option value="">all statuses</option><option value="2">2xx ok</option><option value="4">4xx client error</option><option value="5">5xx server error</option><option value="e">any error</option></select>
+ <label class="chk"><input type="checkbox" id="f-probes"> health, ready, metrics, docs</label>
+ <label class="chk"><input type="checkbox" id="pause"> pause updates</label>
+ <span class="muted" id="count"></span>
+</div>
+<div class="split">
+ <div class="tblwrap" id="calls-wrap"><table id="calls"><thead><tr><th>Time</th><th>Method</th><th>Path</th><th>Status</th><th>Duration</th><th>Client</th><th>Summary</th></tr></thead><tbody></tbody></table></div>
+ <div id="detail"><span class="muted">Click a call to see the full request and answer.</span></div>
+</div>
+<p class="note">Written by the API server started with <span class="m">--dashboard &lt;folder&gt;</span> (sci_jepa/api/calllog.py). The page shows the
+latest calls of each server; health, ready, metrics and docs requests are kept apart so load-balancer polls do not push real calls out.
+Every call is also appended to <span class="m">apicalls/log/&lt;server&gt;/&lt;day&gt;.jsonl</span> next to this page (full history, not pushed to the hosted
+site). Bodies above 24 KB are cut on this page; the JSONL keeps up to 256 KB. Authorization headers and cookies are never logged. The request text
+is what users typed: the server's <span class="m">--call-log-redact</span> setting (shown in the cards) says whether it is kept as sent, with emails and phone
+numbers removed, or not at all.</p>
+<script>
+const $=id=>document.getElementById(id);
+const esc=v=>String(v??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const store={get:k=>{try{return localStorage.getItem(k);}catch(e){return null;}},set:(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}}};
+const f=(v,d=0)=>v==null||isNaN(v)?"–":(+v).toFixed(d);
+const ms=v=>v==null?"–":v>=1000?f(v/1000,2)+" s":f(v,v<10?1:0)+" ms";
+const clock=t=>{if(!t)return "–";const d=new Date(t*1000),now=new Date();
+  const hms=d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+  return d.toDateString()===now.toDateString()?hms:d.toLocaleDateString([],{day:"numeric",month:"short"})+" "+hms;};
+const dur=s=>{s=Math.max(0,s|0);return (s>=86400?Math.floor(s/86400)+"d ":"")+String(Math.floor(s%86400/3600)).padStart(2,"0")+":"+String(Math.floor(s%3600/60)).padStart(2,"0");};
+const pct=(a,p)=>{if(!a.length)return null;const s=[...a].sort((x,y)=>x-y);return s[Math.min(s.length-1,Math.floor(p*s.length))];};
+const pill=s=>`<span class="pill s${String(s)[0]}">${s}</span>`;
+let D=null,KEY=store.get("sj-api-server"),SEL=null,lastSig="";
+const charts={};
+function chart(id,lines){
+  if(charts[id])return charts[id];if(typeof Chart==="undefined")return null;
+  charts[id]=new Chart($(id),{type:"bar",data:{labels:[],datasets:lines.map(([label,col,type])=>({label,data:[],backgroundColor:col,borderColor:col,type:type||"bar",pointRadius:0,borderWidth:type==="line"?1.6:0,stack:"a"}))},
+    options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+      plugins:{legend:{labels:{color:css("--muted"),boxWidth:10,font:{size:11}}}},
+      scales:{x:{stacked:true,ticks:{color:css("--muted"),maxTicksLimit:7,font:{size:10}},grid:{display:false}},
+              y:{stacked:true,beginAtZero:true,ticks:{color:css("--muted"),font:{size:10}},grid:{color:css("--line")}}}}});
+  return charts[id];
+}
+async function getJSON(p){const r=await fetch(p+"?t="+Date.now(),{cache:"no-store"});if(!r.ok)throw new Error(p+": "+r.status);return r.json();}
+async function serverKeys(){
+  if(window.SCIJEPA_HOSTED){const m=await window.SCIJEPA_HOSTED.manifest();
+    return Object.keys(m).map(p=>(p.match(/^apicalls\/servers\/([^/]+)\.json$/)||[])[1]).filter(Boolean);}
+  try{return (await getJSON("apicalls/servers.json")).map(s=>s.key);}catch(e){return [];}
+}
+// ------------------------------------------------------------------ JSON rendering
+function hl(v){
+  const s=JSON.stringify(v,null,2);if(s===undefined)return "";
+  return esc(s).replace(/(&quot;(?:\\.|[^&\\]|&(?!quot;))*?&quot;)(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g,
+    (m,str,colon,kw)=>str?(colon?`<span class="jk">${str}</span>${colon}`:`<span class="js">${str}</span>`):kw?`<span class="jb">${m}</span>`:`<span class="jn">${m}</span>`);
+}
+const block=v=>v==null||v===""?`<span class="muted">none</span>`:typeof v==="string"?`<pre>${esc(v)}</pre>`:`<pre>${hl(v)}</pre>`;
+const kv=o=>{const e=Object.entries(o||{});return e.length?`<div class="kv">${e.map(([k,v])=>`<b>${esc(k)}</b><span class="m">${esc(typeof v==="object"?JSON.stringify(v):v)}</span>`).join("")}</div>`:`<span class="muted">none</span>`;};
+const bytes=n=>n==null?"":n>=1024?f(n/1024,1)+" KB":n+" B";
+function summaryText(c){
+  const s=c.summary||{},bits=[];
+  if(c.error&&c.error.code)bits.push(`<b class="s${String(c.status)[0]}">${esc(c.error.code)}</b>`);
+  if(s.status)bits.push(esc(s.status));
+  if(s.task||s.goal)bits.push("task "+esc(s.task||s.goal));
+  if(s.paper_id)bits.push("paper "+esc(s.paper_id));
+  if(s.n_answers!=null)bits.push(s.n_answers+" answers");
+  if(s.n_items!=null)bits.push(s.n_items+" results");
+  if(s.n_missing)bits.push(s.n_missing+" missing");
+  if(s.session)bits.push(`<span class="m">${esc(s.session)}</span>`);
+  if(s.error_fields&&s.error_fields.length)bits.push("fields: "+esc(s.error_fields.join(", ")));
+  const t=s.text?`<br>“${esc(s.text)}”`:"";
+  const top=s.top?`<br>top: ${esc(s.top.type||"")} ${s.top.score!=null?f(s.top.score,3):""} ${esc((s.top.text||"").slice(0,90))}`:"";
+  return bits.join(" · ")+t+top;
+}
+function curl(c){
+  const base=location.protocol+"//<api host>";
+  const qs=new URLSearchParams(c.query||{}).toString();
+  let s=`curl -X ${c.method} '${base}${c.path}${qs?"?"+qs:""}'`;
+  const h=c.request_headers||{};
+  if(h["content-type"])s+=` \\\n  -H 'Content-Type: ${h["content-type"]}'`;
+  if(h["idempotency-key"])s+=` \\\n  -H 'Idempotency-Key: ${h["idempotency-key"]}'`;
+  if(c.request_body!=null&&typeof c.request_body!=="string"||(typeof c.request_body==="string"&&c.request_body))
+    s+=` \\\n  -d '${(typeof c.request_body==="string"?c.request_body:JSON.stringify(c.request_body)).replace(/'/g,"'\\''")}'`;
+  return s;
+}
+function detail(c){
+  if(!c){$("detail").innerHTML=`<span class="muted">Click a call to see the full request and answer.</span>`;return;}
+  const local=!window.SCIJEPA_HOSTED&&D?`apicalls/log/${encodeURIComponent(D.server.key)}/${(c.time||"").slice(0,10)}.jsonl`:null;
+  $("detail").innerHTML=`<h3>${esc(c.method)} ${esc(c.path)} ${pill(c.status)}</h3>
+  <div class="muted">${clock(c.ts)} · ${ms(c.ms)} · <span class="m">${esc(c.id)}</span></div>
+  <div class="tools"><button data-copy="json">copy call as JSON</button><button data-copy="curl">copy as curl</button><button data-copy="id">copy request ID</button>
+  ${local?`<a href="${local}" target="_blank" rel="noopener"><button>day's JSONL</button></a>`:""}</div>
+  <div class="kv"><b>Time</b><span>${esc(c.time)}</span><b>Endpoint</b><span class="m">${esc(c.route)}${c.endpoint?" → "+esc(c.endpoint)+"()":""}</span>
+  <b>Client</b><span class="m">${esc(c.client)}</span><b>User agent</b><span class="m">${esc(c.user_agent||"–")}</span>
+  <b>Model</b><span class="m">${esc(c.model_id||"– (not loaded)")}</span><b>Sizes</b><span>request ${bytes(c.request_bytes)||"0 B"} · answer ${bytes(c.response_bytes)}</span></div>
+  ${c.error?`<details open><summary>Error</summary>${kv(c.error)}</details>`:""}
+  ${c.traceback?`<details open><summary>Traceback <small>(500)</small></summary><pre>${esc(c.traceback)}</pre></details>`:""}
+  <details open><summary>Request body ${c.request_truncated?"<small>(cut)</small>":""}</summary>${block(c.request_body)}</details>
+  <details open><summary>Answer body ${c.response_truncated?"<small>(cut)</small>":""}</summary>${block(c.response_body)}</details>
+  <details ${Object.keys(c.path_params||{}).length||Object.keys(c.query||{}).length?"open":""}><summary>Path and query parameters</summary>${kv({...c.path_params,...Object.fromEntries(Object.entries(c.query||{}).map(([k,v])=>["?"+k,v]))})}</details>
+  <details><summary>Request headers</summary>${kv(c.request_headers)}</details>
+  <details><summary>Answer headers</summary>${kv(c.response_headers)}</details>`;
+  $("detail").querySelectorAll("[data-copy]").forEach(b=>b.onclick=()=>{
+    const t=b.dataset.copy==="json"?JSON.stringify(c,null,2):b.dataset.copy==="curl"?curl(c):c.id;
+    navigator.clipboard&&navigator.clipboard.writeText(t).then(()=>{const o=b.textContent;b.textContent="copied";setTimeout(()=>b.textContent=o,900);});});
+}
+// ------------------------------------------------------------------ views
+function all(){return D?[...D.calls,...($("f-probes").checked?D.probes:[])].sort((a,b)=>b.ts-a.ts):[];}
+function filtered(){
+  const q=$("q").value.trim().toLowerCase(),r=$("f-route").value,st=$("f-status").value;
+  return all().filter(c=>{
+    if(r&&`${c.method} ${c.route}`!==r)return false;
+    if(st==="e"?c.status<400:st&&String(c.status)[0]!==st)return false;
+    if(q){c._hay=c._hay||JSON.stringify([c.id,c.path,c.client,c.query,c.request_body,c.response_body,c.error]).toLowerCase();if(!c._hay.includes(q))return false;}
+    return true;});
+}
+function renderCalls(){
+  const rows=filtered();
+  $("count").textContent=`${rows.length} of ${all().length} calls`;
+  $("calls").querySelector("tbody").innerHTML=rows.map(c=>`<tr data-id="${esc(c.id)}" data-ts="${c.ts}" class="${SEL&&SEL.id===c.id&&SEL.ts===c.ts?"on":""}">
+    <td>${clock(c.ts)}</td><td class="m">${esc(c.method)}</td><td class="m">${esc(c.path)}</td><td>${pill(c.status)}</td><td>${ms(c.ms)}</td>
+    <td class="m">${esc(c.client)}</td><td class="sum">${summaryText(c)}</td></tr>`).join("")
+    ||`<tr><td colspan="7" class="muted">${D?"no call matches":"no calls yet"}</td></tr>`;
+}
+$("calls").onclick=e=>{const tr=e.target.closest("tr[data-id]");if(!tr)return;
+  SEL=all().find(c=>c.id===tr.dataset.id&&String(c.ts)===tr.dataset.ts)||null;
+  document.querySelectorAll("#calls tr.on").forEach(x=>x.classList.remove("on"));tr.classList.add("on");detail(SEL);};
+["q","f-route","f-status","f-probes"].forEach(id=>$(id).addEventListener("input",renderCalls));
+function render(){
+  const s=D.server||{},T=D.totals||{},now=Date.now()/1000,recent=D.calls||[];
+  const lat=recent.map(c=>c.ms),last5=recent.filter(c=>c.ts>now-300).length,lastHour=(D.minutes||[]).filter(m=>m.t>now-3600);
+  const errs=recent.filter(c=>c.status>=400),e5=recent.filter(c=>c.status>=500).length;
+  const age=now-(D.updated_ts||0);
+  $("sum").textContent=`${s.host||"?"}:${s.port||"?"} · pid ${s.pid||"?"} · updated ${age<5?"just now":clock(D.updated_ts)}${age>120?" (server idle or stopped)":""}`;
+  $("cards").innerHTML=[
+    ["Calls",(T.calls||0).toLocaleString(),`since start · ${(T.errors||0).toLocaleString()} errors (${f(100*(T.errors||0)/Math.max(T.calls||0,1),1)}%)`],
+    ["Last 5 min",String(last5),`${lastHour.reduce((a,m)=>a+m.n,0)} in the last hour`],
+    ["Latency (recent)",ms(pct(lat,.5)),`p95 ${ms(pct(lat,.95))} · max ${ms(lat.length?Math.max(...lat):null)} · over ${lat.length} calls`],
+    ["Errors (recent)",String(errs.length),`${errs.length-e5} client (4xx) · ${e5} server (5xx)`],
+    ["Model",esc((recent.find(c=>c.model_id)||{}).model_id||s.model_id||"–"),esc(s.model?String(s.model).split("/").slice(-2).join("/"):"")+(s.weights?" · "+esc(s.weights):"")],
+    ["Server up",dur(now-(s.started_ts||now)),`started ${clock(s.started_ts)} · bodies: ${esc(s.redact||"?")}`],
+  ].map(([b,v,sm])=>`<div class="card"><b>${b}</b><span>${v}</span><small>${sm}</small></div>`).join("");
+  const M=D.minutes||[],lab=M.map(m=>new Date(m.t*1000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}));
+  const c1=chart("c-rate",[["ok",css("--good")],["errors",css("--bad")]]);
+  if(c1){c1.data.labels=lab;c1.data.datasets[0].data=M.map(m=>m.n-m.errors);c1.data.datasets[1].data=M.map(m=>m.errors);c1.update("none");}
+  const c2=chart("c-lat",[["mean ms",css("--accent"),"line"]]);
+  if(c2){c2.data.labels=lab;c2.data.datasets[0].data=M.map(m=>m.n?m.ms_sum/m.n:null);c2.update("none");}
+  const R=Object.entries(T.by_route||{}).sort((a,b)=>b[1].n-a[1].n);
+  $("routes").querySelector("tbody").innerHTML=R.map(([k,r])=>`<tr><td class="m">${esc(k)}</td><td>${r.n.toLocaleString()}</td><td>${r.errors}</td>
+    <td>${f(100*r.errors/Math.max(r.n,1),1)}%</td><td>${ms(r.ms_sum/Math.max(r.n,1))}</td><td>${ms(r.ms_max)}</td></tr>`).join("")||`<tr><td colspan="6" class="muted">no calls yet</td></tr>`;
+  const sel=$("f-route"),cur=sel.value;
+  sel.innerHTML=`<option value="">all endpoints</option>`+R.map(([k])=>`<option ${k===cur?"selected":""}>${esc(k)}</option>`).join("");
+  renderCalls();
+}
+async function poll(){
+  try{
+    const keys=await serverKeys();
+    const sel=$("server");
+    if(sel.dataset.keys!==keys.join("|")){sel.dataset.keys=keys.join("|");sel.innerHTML=keys.map(k=>`<option>${esc(k)}</option>`).join("");}
+    if(!keys.length){$("err").textContent="";$("sum").textContent="no API server has written a call log here yet (start it with --dashboard <this folder>)";}
+    else{
+      if(!KEY||!keys.includes(KEY))KEY=keys[keys.length-1];sel.value=KEY;
+      if(!$("pause").checked){
+        const d=await getJSON(`apicalls/servers/${encodeURIComponent(KEY)}.json`);
+        const sig=d.updated_ts+"|"+KEY;
+        if(sig!==lastSig){lastSig=sig;D=d;render();}
+      }
+      $("err").textContent="";
+    }
+  }catch(e){$("err").textContent="could not read the call log: "+e.message;}
+  setTimeout(poll,2000);
+}
+$("server").onchange=e=>{KEY=e.target.value;store.set("sj-api-server",KEY);lastSig="";SEL=null;detail(null);};
+poll();
+</script>
+</body></html>

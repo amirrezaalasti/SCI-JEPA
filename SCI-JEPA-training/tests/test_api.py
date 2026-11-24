@@ -252,11 +252,23 @@ def test_docs_examples(client):
         if name in rec and name != "session_delete":
             docs = op["responses"]["200"]["content"]["application/json"]["examples"]
             assert {k: v["value"] for k, v in docs.items()} == rec[name], name
-    for code, e in rec.get("_errors", {}).items():
-        assert e["status"] == int(code)
-    body = X.ERRORS["400"][2]
+    for name, by_code in rec.get("_errors", {}).items():
+        method, path = X.ROUTES[name]
+        for code, e in by_code.items():
+            assert e["status"] == int(code), (name, code)
+            assert e["instance"].split("/v1/")[1].split("/")[0] == path.split("/v1/")[1].split("/")[0], (name, e)
+            documented = spec["paths"][path][method.lower()]["responses"][code]["content"]["application/problem+json"]
+            assert documented["examples"][code]["value"] == e, (name, code)
+    # every error a route documents has an example request for that route
+    for name, (method, path) in X.ROUTES.items():
+        for code, r in spec["paths"][path][method.lower()]["responses"].items():
+            if "application/problem+json" in r.get("content", {}):
+                assert code in X.ERRORS.get(name, {}), (name, code)
+    body = X.ERRORS["forward"]["400"][1]["body"]
     r = client.post("/v1/predict/forward", json=body)
     assert r.status_code == 400 and r.json()["errors"][0]["field"] == "parts"
+    r = client.post("/v1/ask", json=X.ERRORS["ask"]["400"][1]["body"])
+    assert r.status_code == 400 and r.json()["errors"][0]["field"] == "text"
 
 
 # ------------------------------------------------------------------ specification gaps closed (draft of 11 Nov 2026)

@@ -25,6 +25,7 @@ INDEX="${INDEX:-auto}"                 # auto: the index the model was trained o
 PORT="${PORT:-8000}"
 WEIGHTS="${WEIGHTS:-model}"            # model (end of training) or best (best validation epoch)
 EXTRA="${EXTRA:-}"                     # e.g. "--full-texts" (needs much more memory) or "--no-neighbours"
+DASHBOARD="${DASHBOARD:-}"             # e.g. <results>/dashboard: every call, request and answer, on its "API calls" tab
 REPO="${REPO:-${SLURM_SUBMIT_DIR:-$(pwd)}}"
 PA="${REPO%/}"; [ -d "${PA}/src/sci_jepa" ] || PA="${PA}/SCI-JEPA-training"
 PY="${PY:-${PA}/.venv/bin/python}"
@@ -43,7 +44,7 @@ child=0
 trap 'kill -TERM "${child}" 2>/dev/null; wait "${child}"; exit 0' TERM INT
 for attempt in $(seq 0 "${MAX_RESTARTS}"); do
   "${PY}" -m sci_jepa.api --model "${MODEL}" --weights "${WEIGHTS}" --index "${INDEX}" \
-       --device cuda --host 0.0.0.0 --port "${PORT}" --exit-on-cuda-fault ${EXTRA} &
+       --device cuda --host 0.0.0.0 --port "${PORT}" --exit-on-cuda-fault ${DASHBOARD:+--dashboard "${DASHBOARD}"} ${EXTRA} &
   child=$!
   set +e; wait "${child}"; rc=$?; set -e
   [ "${rc}" -eq 0 ] && exit 0

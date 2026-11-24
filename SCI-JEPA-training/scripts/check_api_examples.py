@@ -136,26 +136,20 @@ def main():
                 documented = (docs_200.get(ex_name) or {}).get("value")
                 check(f"{method} {path}", name, ex_name, status, 204 if method == "DELETE" else 200, got, documented)
 
-    # the documented error answers
-    docs_err = {}
-    for path, ops in spec["paths"].items():
-        for op in ops.values():
-            for code, r in op.get("responses", {}).items():
-                e = r.get("content", {}).get("application/problem+json", {}).get("example")
-                if e:
-                    docs_err[code] = e
-    for code, (summary, name, value) in X.ERRORS.items():
+    # the documented error answers, per endpoint
+    for name, by_code in X.ERRORS.items():
         method, path = X.ROUTES[name]
-        if method == "GET":
+        op = spec["paths"].get(path, {}).get(method.lower(), {})
+        for code, (summary, req) in by_code.items():
             p = path
-            for k, v in value.items():
-                p = p.replace("{" + k + "}", v)
-            status, got = call(a.url, method, p)
-        else:
-            status, got = call(a.url, method, path, body=value)
-        check(f"{method} {path}", "_errors", f"error {code}", status, int(code), got, docs_err.get(code))
-        if status == int(code):
-            recorded.setdefault("_errors", {})[code] = got
+            for k, v in (req.get("path") or {}).items():
+                p = p.replace("{" + k + "}", new_session() if v is None else str(v))
+            status, got = call(a.url, method, p, req.get("query"), req.get("body"))
+            doc = (op.get("responses", {}).get(code, {}).get("content", {}).get("application/problem+json", {})
+                   .get("examples", {}).get(code, {}).get("value"))
+            check(f"{method} {path}", "_errors", f"error {code}", status, int(code), got, doc)
+            if status == int(code):
+                recorded.setdefault("_errors", {}).setdefault(name, {})[code] = got
 
     print(f"\n{n - len(failures)}/{n} examples pass")
     if a.write:

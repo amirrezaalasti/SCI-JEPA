@@ -31,6 +31,10 @@ let infra = readFileSync(join(pkg, "infra.html"), "utf8");
 infra = inject(infra, "<head>", HOSTED);
 writeFileSync(join(out, "infra.html"), infra);
 
+let apicalls = readFileSync(join(pkg, "apicalls.html"), "utf8");
+apicalls = inject(apicalls, "<head>", HOSTED);
+writeFileSync(join(out, "apicalls.html"), apicalls);
+
 for (const sub of ["vendor", "graphs/vendor"]) {
   if (!existsSync(join(pkg, "vendor"))) throw new Error("assemble: package vendor/ missing");
   cpSync(join(pkg, "vendor"), join(out, sub), { recursive: true });

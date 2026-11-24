@@ -27,6 +27,31 @@ The interactive docs are at `/v1/docs`, and the OpenAPI file is at `/v1/openapi.
 
 **First start with the full corpus.** The server builds one vector per paper, the centred mean of its KUs' text embeddings. That takes one pass over `comp_x` (61M × 768), which can take a while on NFS. The result is cached as `api_paper_vecs_<index>.npz` next to the index, or in `--cache-dir` if the index folder is read-only.
 
+## Playground for researchers
+
+`/v1/playground` (and `/`, which redirects there) is a page for trying every task in the browser, with examples, and
+with the `curl` and Python code of each call (`playground.html`). It works for anyone who can reach the server. The same
+page is hosted publicly at https://scijepa-playground.vercel.app. Because the cluster only accepts connections from the
+TIB network, the hosted copy reaches this server through a relay worker that only makes outbound connections:
+
+```bash
+PLAYGROUND_RELAY_TOKEN=<token> .venv/bin/python -m sci_jepa.api.relay --api http://<node>:8000 \
+    --relay https://scijepa-playground.vercel.app
+```
+
+See `deploy/playground/README.md`.
+
+## Call log and the dashboard
+
+Start the server with `--dashboard <folder>` (for example `<results>/dashboard`; env `SCIJEPA_API_DASHBOARD`, or `DASHBOARD=...` for the sbatch script) and every call is logged in detail: request ID, time, endpoint, path and query parameters, client, user agent, request headers, request body, status, answer headers, answer body, duration, the error code of a 4xx/5xx answer and the traceback of a 500. The dashboard shows them on **System › API calls (live)** (`apicalls.html`): calls per minute, latency, a table per endpoint, and a searchable call list. Click a call to see the full request and answer, or copy it as JSON or as a curl command. `--dashboard-port 8765` also serves the folder; with `SCIJEPA_PUSH_URL` and `SCIJEPA_PUSH_TOKEN` set, the log is pushed to the hosted dashboard like the training runs.
+
+| File | Content |
+|---|---|
+| `apicalls/servers/<host>-<port>.json` | latest `--call-log-keep` (300) calls and totals of one server; the page polls it |
+| `apicalls/log/<host>-<port>/<day>.jsonl` | every call, one JSON line each; kept `--call-log-days` (30) days; never pushed |
+
+Health, ready, metrics and docs requests have their own short list, so load-balancer polls do not push real calls out. A restarted server reloads its recent calls from the JSONL. Authorization headers and cookies are never logged. **The bodies hold what users typed**: `--call-log-redact full` (default) keeps them as sent, `pii` removes emails and phone numbers, and `meta` keeps no bodies. Deleting a session does not delete its calls from the JSONL. Without `--dashboard`, the log is kept in memory only.
+
 ## Endpoints
 
 | Spec section | Endpoints | State |

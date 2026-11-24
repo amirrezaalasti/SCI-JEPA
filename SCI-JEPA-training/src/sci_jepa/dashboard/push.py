@@ -46,7 +46,7 @@ import time
 import urllib.error
 import urllib.request
 
-SKIP_TOP = {"index.html", "infra.html"}              # served by the deployment itself
+SKIP_TOP = {"index.html", "infra.html", "apicalls.html"}              # served by the deployment itself
 SKIP_DIRS = {"vendor"}
 BATCH_B64 = 3_500_000                                # Vercel function request bodies max out at 4.5 MB
 MAX_RAW = 64 * 1024 * 1024

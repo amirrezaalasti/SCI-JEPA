@@ -43,6 +43,7 @@ def setup_dashboard(root):
     os.makedirs(os.path.join(root, "graphs"), exist_ok=True)
     shutil.copy(os.path.join(os.path.dirname(__file__), "dashboard.html"), os.path.join(root, "index.html"))
     shutil.copy(os.path.join(os.path.dirname(__file__), "infra.html"), os.path.join(root, "infra.html"))
+    shutil.copy(os.path.join(os.path.dirname(__file__), "apicalls.html"), os.path.join(root, "apicalls.html"))
     ensure_vendor(root)
     ensure_vendor(os.path.join(root, "graphs"))
     for f in ("runs.json", "graphs.json"):

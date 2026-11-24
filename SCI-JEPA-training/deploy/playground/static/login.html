@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>Sci-JEPA Playground</title>
+<style>
+:root{--bg:#f7f7f5;--panel:#fff;--text:#1d1d1f;--muted:#5f6368;--line:#e3e3df;--accent:#2457c5;--bad:#b3261e}
+@media (prefers-color-scheme:dark){:root{--bg:#141518;--panel:#1c1d21;--text:#e8e8ea;--muted:#a0a3a9;--line:#2e3036;--accent:#7ea6ff;--bad:#ff8a80}}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:400px;margin:14vh auto 0;padding:24px;background:var(--panel);border:1px solid var(--line);border-radius:14px}
+@media (max-width:440px){main{margin:8vh 16px 0}}
+h1{font-size:20px;margin:0 0 4px}p{color:var(--muted);margin:0 0 16px}
+form{display:grid;gap:10px}
+input{font:inherit;color:inherit;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+button{font:inherit;padding:9px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-weight:600;cursor:pointer}
+#err{color:var(--bad);min-height:1.4em}
+</style></head><body>
+<main>
+ <h1>Sci-JEPA Playground</h1>
+ <p>Enter the access code you were given.</p>
+ <form method="post" action="/api/login">
+  <input type="password" name="code" placeholder="Access code" autocomplete="current-password" autofocus required>
+  <input type="hidden" name="next" id="next">
+  <button type="submit">Continue</button>
+  <div id="err"></div>
+ </form>
+</main>
+<script>
+const q=new URLSearchParams(location.search);
+document.getElementById("next").value=q.get("next")||"/";
+if(q.get("e"))document.getElementById("err").textContent="That code is not right.";
+</script></body></html>

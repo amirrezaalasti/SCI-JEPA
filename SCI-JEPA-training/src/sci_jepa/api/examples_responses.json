@@ -302,8 +302,8 @@
  "ask": {
   "complete": {
    "status": "ok",
-   "session": "ses_Wp8J0ROBbdE3V-xY",
-   "expires_at": "2026-11-21T15:40:47Z",
+   "session": "ses_z9DIjFUxOKAYCAWa",
+   "expires_at": "2026-11-22T09:53:57Z",
    "task": "forward",
    "understood": [
     {
@@ -393,8 +393,8 @@
   },
   "need_more": {
    "status": "need_more",
-   "session": "ses_kKaIttuTQGMk6S7H",
-   "expires_at": "2026-11-21T15:40:48Z",
+   "session": "ses_3a7LpdJULQCEJckj",
+   "expires_at": "2026-11-22T09:53:58Z",
    "task": "forward",
    "understood": [
     {
@@ -1437,8 +1437,8 @@
  "session_answers": {
   "conditions": {
    "status": "ok",
-   "session": "ses_sX2g61Hys59_AqcO",
-   "expires_at": "2026-11-21T15:40:55Z",
+   "session": "ses_8BPP0LSFLNErtM7h",
+   "expires_at": "2026-11-22T09:54:05Z",
    "task": "forward",
    "understood": [
     {
@@ -1528,8 +1528,8 @@
  },
  "session_get": {
   "default": {
-   "session": "ses_hlNm5hVIYN4lvxNP",
-   "expires_at": "2026-11-21T15:40:56Z",
+   "session": "ses_YQgfKP8PyccjyrLZ",
+   "expires_at": "2026-11-22T09:54:06Z",
    "task": "forward",
    "understood": [
     {
@@ -1553,8 +1553,8 @@
    ],
    "last": {
     "status": "need_more",
-    "session": "ses_hlNm5hVIYN4lvxNP",
-    "expires_at": "2026-11-21T15:40:56Z",
+    "session": "ses_YQgfKP8PyccjyrLZ",
+    "expires_at": "2026-11-22T09:54:06Z",
     "task": "forward",
     "understood": [
      {
@@ -1581,73 +1581,538 @@
   }
  },
  "_errors": {
-  "400": {
-   "type": "https://sci-jepa.org/problems/invalid_request",
-   "title": "The request is not valid",
-   "status": 400,
-   "instance": "/v1/predict/forward",
-   "request_id": "req_e86977f63fd9456a",
-   "code": "invalid_request",
-   "errors": [
-    {
-     "field": "parts",
-     "code": "missing",
-     "message": "Field required",
-     "hint": null
-    },
-    {
-     "field": "problem",
-     "code": "unknown_field",
-     "message": "Extra inputs are not permitted",
-     "hint": null
-    },
-    {
-     "field": "method",
-     "code": "unknown_field",
-     "message": "Extra inputs are not permitted",
-     "hint": null
-    },
-    {
-     "field": "conditions",
-     "code": "unknown_field",
-     "message": "Extra inputs are not permitted",
-     "hint": null
-    }
-   ]
+  "ask": {
+   "400": {
+    "type": "https://sci-jepa.org/problems/invalid_request",
+    "title": "The request is not valid",
+    "status": 400,
+    "instance": "/v1/ask",
+    "request_id": "req_b13b37fcb7ba4e1c",
+    "code": "invalid_request",
+    "errors": [
+     {
+      "field": "text",
+      "code": "missing",
+      "message": "Field required",
+      "hint": null
+     }
+    ]
+   },
+   "422": {
+    "type": "https://sci-jepa.org/problems/invalid_value",
+    "title": "Unknown model",
+    "status": 422,
+    "instance": "/v1/ask",
+    "request_id": "req_f7bfc23eb3c542ed",
+    "code": "invalid_value",
+    "errors": [
+     {
+      "field": "model",
+      "code": "invalid_value",
+      "message": "'string' is not served here",
+      "hint": "Use 'sci-jepa-1.0.0' or leave `model` out."
+     }
+    ]
+   }
   },
-  "422": {
-   "type": "https://sci-jepa.org/problems/too_vague",
-   "title": "The input is incomplete or too vague",
-   "status": 422,
-   "instance": "/v1/predict/forward",
-   "request_id": "req_c01dd529cf244a43",
-   "code": "too_vague",
-   "errors": [
-    {
-     "field": "parts.method",
-     "code": "too_vague",
-     "message": "What exactly did you do: which model, algorithm or technique?",
-     "hint": "For example: Fine-tuning a small language model on the protocol text."
-    }
-   ]
+  "parse": {
+   "400": {
+    "type": "https://sci-jepa.org/problems/invalid_request",
+    "title": "The request is not valid",
+    "status": 400,
+    "instance": "/v1/parse",
+    "request_id": "req_5cd3e84f8cff4fb3",
+    "code": "invalid_request",
+    "errors": [
+     {
+      "field": "text",
+      "code": "missing",
+      "message": "Field required",
+      "hint": null
+     }
+    ]
+   },
+   "422": {
+    "type": "https://sci-jepa.org/problems/invalid_value",
+    "title": "The request is not valid",
+    "status": 422,
+    "instance": "/v1/parse",
+    "request_id": "req_64677920a40b421c",
+    "code": "invalid_value",
+    "errors": [
+     {
+      "field": "goal",
+      "code": "invalid_value",
+      "message": "Input should be 'forward', 'inverse', 'abduction', 'consistency', 'edit_check' or 'intervention'",
+      "hint": "Use one of: 'forward', 'inverse', 'abduction', 'consistency', 'edit_check' or 'intervention'."
+     }
+    ]
+   }
   },
-  "403": {
-   "type": "https://sci-jepa.org/problems/reveal_not_allowed",
-   "title": "reveal_truth is allowed only for validation papers",
-   "status": 403,
-   "instance": "/v1/ask/paper",
-   "request_id": "req_245c9cf3e92a4b1b",
-   "code": "reveal_not_allowed",
-   "detail": "2210.12843 is a train paper; test papers stay hidden until the review of the accompanying paper is complete."
+  "validate": {
+   "400": {
+    "type": "https://sci-jepa.org/problems/invalid_request",
+    "title": "The request is not valid",
+    "status": 400,
+    "instance": "/v1/validate",
+    "request_id": "req_d562b99f4d4642f3",
+    "code": "invalid_request",
+    "errors": [
+     {
+      "field": "task",
+      "code": "missing",
+      "message": "Field required",
+      "hint": null
+     }
+    ]
+   },
+   "422": {
+    "type": "https://sci-jepa.org/problems/invalid_value",
+    "title": "The request is not valid",
+    "status": 422,
+    "instance": "/v1/validate",
+    "request_id": "req_8781b9f4ca0344da",
+    "code": "invalid_value",
+    "errors": [
+     {
+      "field": "task",
+      "code": "invalid_value",
+      "message": "Input should be 'forward', 'inverse', 'abduction', 'consistency', 'edit_check' or 'intervention'",
+      "hint": "Use one of: 'forward', 'inverse', 'abduction', 'consistency', 'edit_check' or 'intervention'."
+     }
+    ]
+   }
   },
-  "404": {
-   "type": "https://sci-jepa.org/problems/not_found",
-   "title": "Not found",
-   "status": 404,
-   "instance": "/v1/sessions/ses_doesnotexist",
-   "request_id": "req_174efad54dd54f28",
-   "code": "not_found",
-   "detail": "'ses_doesnotexist' does not exist or expired"
+  "forward": {
+   "400": {
+    "type": "https://sci-jepa.org/problems/invalid_request",
+    "title": "The request is not valid",
+    "status": 400,
+    "instance": "/v1/predict/forward",
+    "request_id": "req_beeef310492d41b9",
+    "code": "invalid_request",
+    "errors": [
+     {
+      "field": "parts",
+      "code": "missing",
+      "message": "Field required",
+      "hint": null
+     },
+     {
+      "field": "problem",
+      "code": "unknown_field",
+      "message": "Extra inputs are not permitted",
+      "hint": null
+     },
+     {
+      "field": "method",
+      "code": "unknown_field",
+      "message": "Extra inputs are not permitted",
+      "hint": null
+     },
+     {
+      "field": "conditions",
+      "code": "unknown_field",
+      "message": "Extra inputs are not permitted",
+      "hint": null
+     }
+    ]
+   },
+   "422": {
+    "type": "https://sci-jepa.org/problems/too_vague",
+    "title": "The input is incomplete or too vague",
+    "status": 422,
+    "instance": "/v1/predict/forward",
+    "request_id": "req_cd9f616f1883428f",
+    "code": "too_vague",
+    "errors": [
+     {
+      "field": "parts.method",
+      "code": "too_vague",
+      "message": "What exactly did you do: which model, algorithm or technique?",
+      "hint": "For example: Fine-tuning a small language model on the protocol text."
+     }
+    ]
+   }
+  },
+  "inverse": {
+   "400": {
+    "type": "https://sci-jepa.org/problems/invalid_request",
+    "title": "The request is not valid",
+    "status": 400,
+    "instance": "/v1/predict/inverse",
+    "request_id": "req_83a5b5d46cfb4d19",
+    "code": "invalid_request",
+    "errors": [
+     {
+      "field": "parts",
+      "code": "missing",
+      "message": "Field required",
+      "hint": null
+     },
+     {
+      "field": "problem",
+      "code": "unknown_field",
+      "message": "Extra inputs are not permitted",
+      "hint": null
+     },
+     {
+      "field": "result",
+      "code": "unknown_field",
+      "message": "Extra inputs are not permitted",
+      "hint": null
+     }
+    ]
+   },
+   "422": {
+    "type": "https://sci-jepa.org/problems/too_vague",
+    "title": "The input is incomplete or too vague",
+    "status": 422,
+    "instance": "/v1/predict/inverse",
+    "request_id": "req_67745cf3c2624b14",
+    "code": "too_vague",
+    "errors": [
+     {
+      "field": "parts.result",
+      "code": "too_vague",
+      "message": "What changed, by how much, and compared with what?",
+      "hint": "For example: Top-1 accuracy rose from 71.2% to 76.8% over a ResNet-50 baseline on ImageNet."
+     }
+    ]
+   }
+  },
+  "abduction": {
+   "400": {
+    "type": "https://sci-jepa.org/problems/invalid_request",
+    "title": "The request is not valid",
+    "status": 400,
+    "instance": "/v1/predict/abduction",
+    "request_id": "req_80d81669fd424d77",
+    "code": "invalid_request",
+    "errors": [
+     {
+      "field": "parts",
+      "code": "missing",
+      "message": "Field required",
+      "hint": null
+     },
+     {
+      "field": "result",
+      "code": "unknown_field",
+      "message": "Extra inputs are not permitted",
+      "hint": null
+     },
+     {
+      "field": "conditions",
+      "code": "unknown_field",
+      "message": "Extra inputs are not permitted",
+      "hint": null
+     }
+    ]
+   },
+   "422": {
+    "type": "https://sci-jepa.org/problems/too_vague",
+    "title": "The input is incomplete or too vague",
+    "status": 422,
+    "instance": "/v1/predict/abduction",
+    "request_id": "req_d1e3a295d56540f7",
+    "code": "too_vague",
+    "errors": [
+     {
+      "field": "parts.result",
+      "code": "too_vague",
+      "message": "What changed, by how much, and compared with what?",
+      "hint": "For example: Top-1 accuracy rose from 71.2% to 76.8% over a ResNet-50 baseline on ImageNet."
+     }
+    ]
+   }
+  },
+  "consistency": {
+   "400": {
+    "type": "https://sci-jepa.org/problems/invalid_request",
+    "title": "The request is not valid",
+    "status": 400,
+    "instance": "/v1/consistency",
+    "request_id": "req_0fd6d755ab9b40ca",
+    "code": "invalid_request",
+    "errors": [
+     {
+      "field": "parts",
+      "code": "missing",
+      "message": "Field required",
+      "hint": null
+     },
+     {
+      "field": "claim",
+      "code": "unknown_field",
+      "message": "Extra inputs are not permitted",
+      "hint": null
+     },
+     {
+      "field": "evidence",
+      "code": "unknown_field",
+      "message": "Extra inputs are not permitted",
+      "hint": null
+     }
+    ]
+   },
+   "422": {
+    "type": "https://sci-jepa.org/problems/out_of_range",
+    "title": "The request is not valid",
+    "status": 422,
+    "instance": "/v1/consistency",
+    "request_id": "req_a239e2839ca947da",
+    "code": "out_of_range",
+    "errors": [
+     {
+      "field": "related",
+      "code": "out_of_range",
+      "message": "Input should be less than or equal to 10",
+      "hint": "Check the allowed range in the specification (top_k 1-50, years 1990-2026)."
+     }
+    ]
+   }
+  },
+  "edit_check": {
+   "400": {
+    "type": "https://sci-jepa.org/problems/invalid_request",
+    "title": "The request is not valid",
+    "status": 400,
+    "instance": "/v1/edit-check",
+    "request_id": "req_da2fda9ededa410c",
+    "code": "invalid_request",
+    "errors": [
+     {
+      "field": "edited",
+      "code": "missing",
+      "message": "Field required",
+      "hint": null
+     }
+    ]
+   },
+   "422": {
+    "type": "https://sci-jepa.org/problems/invalid_value",
+    "title": "The input is incomplete or too vague",
+    "status": 422,
+    "instance": "/v1/edit-check",
+    "request_id": "req_e351310ef5fc49c6",
+    "code": "invalid_value",
+    "errors": [
+     {
+      "field": "body.edited",
+      "code": "invalid_value",
+      "message": "The edited copy is the same as the original; what did you change?",
+      "hint": "For example: Adding dropout increased overfitting by 12%."
+     }
+    ]
+   }
+  },
+  "intervention": {
+   "400": {
+    "type": "https://sci-jepa.org/problems/invalid_request",
+    "title": "The request is not valid",
+    "status": 400,
+    "instance": "/v1/intervention",
+    "request_id": "req_4272956e55154ea7",
+    "code": "invalid_request",
+    "errors": [
+     {
+      "field": "change",
+      "code": "missing",
+      "message": "Field required",
+      "hint": null
+     }
+    ]
+   },
+   "422": {
+    "type": "https://sci-jepa.org/problems/invalid_change",
+    "title": "The input is incomplete or too vague",
+    "status": 422,
+    "instance": "/v1/intervention",
+    "request_id": "req_61df73e130234b98",
+    "code": "invalid_change",
+    "errors": [
+     {
+      "field": "parts.change",
+      "code": "invalid_change",
+      "message": "Name what you would change: the method or the conditions.",
+      "hint": "For example: Training a graph neural network on reaction graphs."
+     }
+    ]
+   }
+  },
+  "session_answers": {
+   "400": {
+    "type": "https://sci-jepa.org/problems/invalid_request",
+    "title": "The request is not valid",
+    "status": 400,
+    "instance": "/v1/sessions/ses__OliG62dkpeOIPYQ/answers",
+    "request_id": "req_7dd2b2e3a9e04f0c",
+    "code": "invalid_request",
+    "errors": [
+     {
+      "field": "conditions",
+      "code": "unknown_field",
+      "message": "Extra inputs are not permitted",
+      "hint": null
+     }
+    ]
+   },
+   "404": {
+    "type": "https://sci-jepa.org/problems/not_found",
+    "title": "Not found",
+    "status": 404,
+    "instance": "/v1/sessions/ses_doesnotexist/answers",
+    "request_id": "req_8200f3b7eded4b1b",
+    "code": "not_found",
+    "detail": "'ses_doesnotexist' does not exist or expired"
+   },
+   "422": {
+    "type": "https://sci-jepa.org/problems/invalid_value",
+    "title": "Unknown part",
+    "status": 422,
+    "instance": "/v1/sessions/ses_ra20qcUBbnBxBGNE/answers",
+    "request_id": "req_e9044a0e6c4a4cad",
+    "code": "invalid_value",
+    "errors": [
+     {
+      "field": "answers.colour",
+      "code": "invalid_value",
+      "message": "'colour' is not a part",
+      "hint": "Use one of: ['change', 'claim', 'conditions', 'edited', 'evidence', 'method', 'original', 'problem', 'result']."
+     }
+    ]
+   }
+  },
+  "session_get": {
+   "404": {
+    "type": "https://sci-jepa.org/problems/not_found",
+    "title": "Not found",
+    "status": 404,
+    "instance": "/v1/sessions/ses_doesnotexist",
+    "request_id": "req_5e16cd530c2a4f5d",
+    "code": "not_found",
+    "detail": "'ses_doesnotexist' does not exist or expired"
+   }
+  },
+  "session_delete": {
+   "404": {
+    "type": "https://sci-jepa.org/problems/not_found",
+    "title": "Not found",
+    "status": 404,
+    "instance": "/v1/sessions/ses_doesnotexist",
+    "request_id": "req_38fd39040a714374",
+    "code": "not_found",
+    "detail": "'ses_doesnotexist' does not exist or expired"
+   }
+  },
+  "papers_search": {
+   "422": {
+    "type": "https://sci-jepa.org/problems/too_short",
+    "title": "The request is not valid",
+    "status": 422,
+    "instance": "/v1/papers/search",
+    "request_id": "req_4da8607afb6048be",
+    "code": "too_short",
+    "errors": [
+     {
+      "field": "q",
+      "code": "too_short",
+      "message": "String should have at least 1 character",
+      "hint": "Write at least 1 characters: a few sentences on your problem, method and result."
+     }
+    ]
+   }
+  },
+  "paper": {
+   "404": {
+    "type": "https://sci-jepa.org/problems/not_found",
+    "title": "Not found",
+    "status": 404,
+    "instance": "/v1/papers/9999.99999",
+    "request_id": "req_aed2082cd4c9473f",
+    "code": "not_found",
+    "detail": "'9999.99999' does not exist or expired"
+   },
+   "422": {
+    "type": "https://sci-jepa.org/problems/invalid_id",
+    "title": "Not an arXiv ID or DOI",
+    "status": 422,
+    "instance": "/v1/papers/not-a-paper",
+    "request_id": "req_b952b368c1304470",
+    "code": "invalid_id",
+    "errors": [
+     {
+      "field": "paper_id",
+      "code": "invalid_id",
+      "message": "'not-a-paper' is neither an arXiv ID nor a DOI",
+      "hint": "Use e.g. 2403.01234 or hep-th/9901001 (or a p_<n> ID from an earlier answer)."
+     }
+    ]
+   }
+  },
+  "ku": {
+   "404": {
+    "type": "https://sci-jepa.org/problems/not_found",
+    "title": "Not found",
+    "status": 404,
+    "instance": "/v1/kus/ku_999999999",
+    "request_id": "req_0d6838dc62b64938",
+    "code": "not_found",
+    "detail": "'ku_999999999' does not exist or expired"
+   }
+  },
+  "ask_paper": {
+   "400": {
+    "type": "https://sci-jepa.org/problems/invalid_request",
+    "title": "The request is not valid",
+    "status": 400,
+    "instance": "/v1/ask/paper",
+    "request_id": "req_d2ad9384b8cd4ecf",
+    "code": "invalid_request",
+    "errors": [
+     {
+      "field": "paper_id",
+      "code": "missing",
+      "message": "Field required",
+      "hint": null
+     }
+    ]
+   },
+   "403": {
+    "type": "https://sci-jepa.org/problems/reveal_not_allowed",
+    "title": "reveal_truth is allowed only for validation papers",
+    "status": 403,
+    "instance": "/v1/ask/paper",
+    "request_id": "req_3069711467264655",
+    "code": "reveal_not_allowed",
+    "detail": "2210.12843 is a train paper; test papers stay hidden until the review of the accompanying paper is complete."
+   },
+   "404": {
+    "type": "https://sci-jepa.org/problems/not_found",
+    "title": "Not found",
+    "status": 404,
+    "instance": "/v1/ask/paper",
+    "request_id": "req_79fa127de5444e4b",
+    "code": "not_found",
+    "detail": "'9999.99999' does not exist or expired"
+   },
+   "422": {
+    "type": "https://sci-jepa.org/problems/invalid_value",
+    "title": "The request is not valid",
+    "status": 422,
+    "instance": "/v1/ask/paper",
+    "request_id": "req_14030aeb3f8f4835",
+    "code": "invalid_value",
+    "errors": [
+     {
+      "field": "goal",
+      "code": "invalid_value",
+      "message": "Input should be 'forward', 'inverse' or 'abduction'",
+      "hint": "Use one of: 'forward', 'inverse' or 'abduction'."
+     }
+    ]
+   }
   }
  }
 }

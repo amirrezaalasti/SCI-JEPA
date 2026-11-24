@@ -1,0 +1,934 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sci-JEPA Playground</title>
+<meta name="description" content="Try the Sci-JEPA model: predict results, find methods, explain findings, check claims.">
+<!-- playground-config -->
+<style>
+:root{--bg:#f7f7f5;--panel:#fff;--text:#1d1d1f;--muted:#5f6368;--line:#e3e3df;--accent:#2457c5;--accent-soft:#e8eefb;
+  --ok:#1e7a46;--ok-soft:#e5f4ea;--bad:#b3261e;--bad-soft:#fbe9e7;--warn:#8a5a00;--warn-soft:#fdf3dc;--code:#f2f2ef;
+  --shadow:0 1px 2px rgba(0,0,0,.05),0 1px 8px rgba(0,0,0,.04)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141518;--panel:#1c1d21;--text:#e8e8ea;--muted:#a0a3a9;
+  --line:#2e3036;--accent:#7ea6ff;--accent-soft:#1f2a44;--ok:#6fd39b;--ok-soft:#183325;--bad:#ff8a80;--bad-soft:#3a1d1b;
+  --warn:#f1c46b;--warn-soft:#3a2f17;--code:#24262b;--shadow:none}}
+:root[data-theme="dark"]{--bg:#141518;--panel:#1c1d21;--text:#e8e8ea;--muted:#a0a3a9;--line:#2e3036;--accent:#7ea6ff;
+  --accent-soft:#1f2a44;--ok:#6fd39b;--ok-soft:#183325;--bad:#ff8a80;--bad-soft:#3a1d1b;--warn:#f1c46b;--warn-soft:#3a2f17;
+  --code:#24262b;--shadow:none}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--accent)}
+header{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--line);background:var(--panel);
+  position:sticky;top:0;z-index:5}
+header h1{font-size:17px;margin:0;font-weight:650;letter-spacing:-.01em}
+header h1 span{color:var(--muted);font-weight:450}
+.grow{flex:1}
+.pill{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;font-size:13px;padding:3px 10px;border-radius:99px;background:var(--code);color:var(--muted)}
+.pill i{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block}
+.pill.ok i{background:var(--ok)}.pill.bad i{background:var(--bad)}.pill.wait i{background:var(--warn)}
+button,select,input,textarea{font:inherit;color:inherit}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:6px 12px;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+:root[data-theme="dark"] .btn.primary{color:#0b1020}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .btn.primary{color:#0b1020}}
+.btn:disabled{opacity:.55;cursor:wait}
+.btn.small{padding:2px 9px;font-size:13px}
+.btn.link{border:none;background:none;color:var(--accent);padding:0;cursor:pointer}
+.layout{display:grid;grid-template-columns:230px 1fr;max-width:1240px;margin:0 auto}
+nav{padding:18px 10px;position:sticky;top:53px;align-self:start;height:calc(100vh - 53px);overflow:auto}
+nav .grp{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:16px 10px 6px}
+nav button{display:block;width:100%;text-align:left;border:none;background:none;padding:7px 10px;border-radius:8px;cursor:pointer}
+nav button:hover{background:var(--code)}
+nav button.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+main{padding:22px 24px 80px;min-width:0}
+section{display:none}section.on{display:block}
+h2{font-size:22px;margin:0 0 4px;letter-spacing:-.015em}
+.lead{color:var(--muted);margin:0 0 18px;max-width:780px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow);margin-bottom:14px}
+label.f{display:block;font-weight:600;font-size:14px;margin:10px 0 4px}
+label.f small{font-weight:400;color:var(--muted)}
+textarea,input[type=text],input[type=number],select{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--bg)}
+textarea{min-height:64px;resize:vertical}
+textarea:focus,input:focus,select:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+.invalid{border-color:var(--bad)!important;background:var(--bad-soft)!important}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.row>*{flex:0 0 auto}
+.examples{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:4px;font-size:13px;color:var(--muted)}
+.chip{border:1px solid var(--line);background:var(--bg);border-radius:99px;padding:2px 10px;font-size:13px;cursor:pointer}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
+details.opts{margin-top:12px;font-size:14px}
+details.opts summary{cursor:pointer;color:var(--muted)}
+.optgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:8px}
+.fields{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:4px}
+.fields label{font-size:13px;display:flex;gap:4px;align-items:center}
+.actions{display:flex;gap:10px;align-items:center;margin-top:14px}
+.timer{color:var(--muted);font-size:13px}
+.result:empty{display:none}
+.answer{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:8px 0;background:var(--panel)}
+.answer.truth{border-color:var(--ok);background:var(--ok-soft)}
+.answer .top{display:flex;gap:10px;align-items:baseline}
+.answer .rank{font-weight:700;color:var(--muted);min-width:22px}
+.answer .txt{flex:1}
+.bar{height:6px;border-radius:3px;background:var(--code);overflow:hidden;width:90px;flex:0 0 90px;align-self:center}
+.bar b{display:block;height:100%;background:var(--accent)}
+.meta{font-size:12.5px;color:var(--muted);margin-top:4px;display:flex;flex-wrap:wrap;gap:4px 12px;padding-left:32px}
+.tag{display:inline-block;font-size:11.5px;padding:0 7px;border-radius:5px;background:var(--code);color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.tag.val{background:var(--ok-soft);color:var(--ok)}.tag.test{background:var(--warn-soft);color:var(--warn)}
+.msg{border-radius:10px;padding:10px 14px;margin:10px 0;font-size:14px}
+.msg.err{background:var(--bad-soft);color:var(--bad)}
+.msg.warn{background:var(--warn-soft);color:var(--warn)}
+.msg.info{background:var(--accent-soft);color:var(--text)}
+.msg ul{margin:6px 0 0;padding-left:18px}
+.verdict{font-size:20px;font-weight:700;margin:6px 0}
+.verdict.supports{color:var(--ok)}.verdict.challenges{color:var(--bad)}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.split h4{margin:6px 0}
+.big{font-size:28px;font-weight:700;letter-spacing:-.02em}
+.meter{height:10px;border-radius:5px;background:var(--code);overflow:hidden;margin:6px 0}
+.meter b{display:block;height:100%;background:linear-gradient(90deg,var(--ok),var(--warn),var(--bad))}
+.understood{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.understood div{font-size:14px}.understood b{text-transform:capitalize}
+.conf{font-size:12px;color:var(--muted)}
+.notes{font-size:12.5px;color:var(--muted);margin-top:10px}
+.notes p{margin:2px 0}
+details.code{margin-top:12px;border-top:1px dashed var(--line);padding-top:8px}
+details.code summary{cursor:pointer;font-size:14px;color:var(--muted)}
+.tabs{display:flex;gap:4px;margin:8px 0 0}
+.tabs button{border:1px solid var(--line);border-bottom:none;background:var(--bg);border-radius:8px 8px 0 0;padding:3px 12px;font-size:13px;cursor:pointer}
+.tabs button.on{background:var(--code);font-weight:600}
+pre{background:var(--code);border-radius:0 8px 8px 8px;padding:12px;overflow:auto;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin:0;max-height:420px;white-space:pre}
+.precap{display:flex;justify-content:flex-end;margin-top:4px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:600;color:var(--muted);font-size:13px}
+td.num{font-variant-numeric:tabular-nums}
+.kus .ku{padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
+.kus .ku:last-child{border:none}
+.hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin:14px 0}
+.hero .card{margin:0;cursor:pointer}
+.hero .card:hover{border-color:var(--accent)}
+.hero h3{margin:0 0 4px;font-size:15px}
+.hero p{margin:0;font-size:13.5px;color:var(--muted)}
+.kv{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;font-size:14px}
+.kv dt{color:var(--muted)}.kv dd{margin:0;word-break:break-all}
+.muted{color:var(--muted)}
+.missing{border:1px solid var(--warn);background:var(--warn-soft);border-radius:10px;padding:10px 12px;margin:8px 0}
+.missing .q{font-weight:600}
+@media (max-width:820px){.layout{grid-template-columns:1fr}nav{position:static;height:auto;display:flex;flex-wrap:wrap;gap:4px;padding:10px 16px}
+  nav .grp{display:none}nav button{width:auto}main{padding:16px}.split{grid-template-columns:1fr}header{padding:10px 16px}
+  .bar{display:none}.meta{padding-left:0}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Sci-JEPA <span>Playground</span></h1>
+  <div class="grow"></div>
+  <span class="pill wait" id="status" title="Model status"><i></i><span>checking…</span></span>
+  <button class="btn small" id="theme" title="Switch light / dark">◐</button>
+</header>
+<div class="layout">
+<nav id="nav">
+  <button data-go="start" class="on">Start here</button>
+  <div class="grp">Ask</div>
+  <button data-go="ask">Ask in plain words</button>
+  <div class="grp">Tasks</div>
+  <button data-go="forward">Predict results</button>
+  <button data-go="inverse">Find a method</button>
+  <button data-go="abduction">Explain results</button>
+  <button data-go="consistency">Check a claim</button>
+  <button data-go="intervention">What if…?</button>
+  <button data-go="edit_check">Spot an edit</button>
+  <div class="grp">Corpus</div>
+  <button data-go="explore">Explore papers</button>
+  <div class="grp">Reference</div>
+  <button data-go="model">The model</button>
+  <button data-go="code">Use it from code</button>
+</nav>
+<main>
+<section id="s-start" class="on">
+  <h2>What can Sci-JEPA do?</h2>
+  <p class="lead">Sci-JEPA reads research as structured parts (the <b>problem</b>, the <b>method</b>, the
+  <b>conditions</b>, the <b>result</b>, a <b>claim</b> and its <b>evidence</b>). Give it some parts and it predicts the
+  representation of a missing one, then ranks real findings from about two million arXiv papers by how well they fit that
+  prediction. Every answer links to the paper it came from.</p>
+  <div class="hero" id="hero"></div>
+  <div class="card">
+    <h3 style="margin-top:0">How to read the answers</h3>
+    <ul style="margin:0;padding-left:20px">
+      <li>Answers are <b>published findings</b> that fit the model's prediction. They are not generated text and not a fact check.</li>
+      <li>The <b>score</b> mixes the model's prediction (<code>jepa</code>), text similarity (<code>text</code>) and keyword overlap (<code>bm25</code>). Scores compare answers within one request only. Under <i>Options</i> you can rank by one of them alone and see the difference.</li>
+      <li>Papers are tagged <span class="tag">train</span>, <span class="tag val">val</span> or <span class="tag test">test</span>: the split they were in when the model was trained.</li>
+      <li>Every panel has <b>Show the API call</b>: the same request as <code>curl</code> or Python, and the raw answer.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="s-ask">
+  <h2>Ask in plain words</h2>
+  <p class="lead">Describe your research in a few sentences. The server splits the text into parts, asks for whatever the
+  task still needs, then answers. Use English, at least two sentences.</p>
+  <div class="card">
+    <div class="examples" data-examples="ask"></div>
+    <label class="f" for="ask-text">Your research</label>
+    <textarea id="ask-text" data-part="text" style="min-height:110px" placeholder="We want to … We use … on … data."></textarea>
+    <label class="f" for="ask-goal">What do you want to know? <small>(leave on "work it out" to let the server choose)</small></label>
+    <select id="ask-goal">
+      <option value="">Work it out from my text</option>
+      <option value="forward">What results can I expect? (forward)</option>
+      <option value="inverse">Which method could lead to this result? (inverse)</option>
+      <option value="abduction">What could explain these results? (abduction)</option>
+      <option value="consistency">Is this claim supported by the evidence? (consistency)</option>
+    </select>
+    <div data-options="ask"></div>
+    <div class="actions"><button class="btn primary" id="ask-go">Ask</button><button class="btn" id="ask-reset" hidden>Start over</button><span class="timer"></span></div>
+  </div>
+  <div class="result" id="ask-out"></div>
+  <div data-code="ask"></div>
+</section>
+
+<section id="s-forward"></section>
+<section id="s-inverse"></section>
+<section id="s-abduction"></section>
+
+<section id="s-consistency">
+  <h2>Check a claim</h2>
+  <p class="lead">Give a claim and the evidence for it. The model's relation head says whether the evidence
+  <b>supports</b> or <b>challenges</b> the claim, and lists related evidence from the corpus on each side.</p>
+  <div class="card">
+    <div class="examples" data-examples="consistency"></div>
+    <label class="f">Claim</label><textarea data-part="claim" placeholder="Dropout reduces overfitting in small transformers."></textarea>
+    <label class="f">Evidence</label><textarea data-part="evidence" placeholder="On 5 datasets, validation loss fell by 12% with dropout 0.1 versus none."></textarea>
+    <label class="f">Related evidence to fetch from the corpus <small>(0 to 10)</small></label>
+    <input type="number" min="0" max="10" value="5" id="cons-related" style="max-width:120px">
+    <div class="actions"><button class="btn primary" data-run="consistency">Check</button><span class="timer"></span></div>
+  </div>
+  <div class="result"></div>
+  <div data-code="consistency"></div>
+</section>
+
+<section id="s-intervention">
+  <h2>What if…?</h2>
+  <p class="lead">Describe a study, then change one part, for example another method or another dataset. The model
+  predicts the result before and after the change, says how far the prediction moved, and shows the findings that fit
+  each version.</p>
+  <div class="card">
+    <div class="examples" data-examples="intervention"></div>
+    <label class="f">Problem</label><textarea data-part="problem"></textarea>
+    <label class="f">Method</label><textarea data-part="method"></textarea>
+    <label class="f">Conditions <small>(data, setup, scale)</small></label><textarea data-part="conditions"></textarea>
+    <div class="card" style="background:var(--accent-soft);border-color:transparent;margin:14px 0 0">
+      <div class="row"><b>Change</b>
+        <select id="int-part" style="width:auto"><option value="method">the method</option><option value="conditions">the conditions</option><option value="problem">the problem</option></select>
+        <span>to:</span></div>
+      <textarea id="int-text" data-part="change" style="margin-top:6px" placeholder="Training a graph neural network on reaction graphs."></textarea>
+    </div>
+    <div data-options="intervention"></div>
+    <div class="actions"><button class="btn primary" data-run="intervention">Compare</button><span class="timer"></span></div>
+  </div>
+  <div class="result"></div>
+  <div data-code="intervention"></div>
+</section>
+
+<section id="s-edit_check">
+  <h2>Spot an edit</h2>
+  <p class="lead">Give a finding and a copy with one thing changed (a flipped direction, a negation, another number, a
+  swapped term). Does the model tell them apart? Add the study's context to use the rule from the evaluation: does the
+  model's prediction prefer the original?</p>
+  <div class="card">
+    <div class="examples" data-examples="edit_check"></div>
+    <label class="f">Original finding</label><textarea data-part="original"></textarea>
+    <label class="f">Edited finding</label><textarea data-part="edited"></textarea>
+    <details class="opts" id="ec-ctx"><summary>Add context (problem, method, conditions)</summary>
+      <label class="f">Problem</label><textarea data-part="ctx-problem"></textarea>
+      <label class="f">Method</label><textarea data-part="ctx-method"></textarea>
+      <label class="f">Conditions</label><textarea data-part="ctx-conditions"></textarea>
+    </details>
+    <div class="actions"><button class="btn primary" data-run="edit_check">Check</button><span class="timer"></span></div>
+  </div>
+  <div class="result"></div>
+  <div data-code="edit_check"></div>
+</section>
+
+<section id="s-explore">
+  <h2>Explore papers</h2>
+  <p class="lead">Search the corpus by topic (the index has no titles yet, so search ranks papers by content) or by
+  arXiv ID. Open a paper to see its knowledge units, the parts the model reads. Then hide one part and see whether the
+  model finds it again.</p>
+  <div class="card">
+    <div class="row" style="flex-wrap:nowrap">
+      <input type="text" id="ex-q" placeholder="graph neural networks for reaction yield prediction, or 2403.00015" style="flex:1">
+      <button class="btn primary" id="ex-go">Search</button>
+    </div>
+    <div class="examples" style="margin-top:8px" data-examples="explore"></div>
+    <span class="timer"></span>
+  </div>
+  <div class="result" id="ex-list"></div>
+  <div class="result" id="ex-paper"></div>
+  <div data-code="explore"></div>
+</section>
+
+<section id="s-model">
+  <h2>The model</h2>
+  <p class="lead">Which model is answering, how it was built, and how it scored on the held-out test papers.</p>
+  <div class="result" id="model-out"><div class="card muted">Loading…</div></div>
+</section>
+
+<section id="s-code">
+  <h2>Use it from code</h2>
+  <p class="lead">Everything on this page is a plain JSON call to the Sci-JEPA HTTP API. Open
+  <b>Show the API call</b> under any result to copy that request as <code>curl</code> or Python.</p>
+  <div class="card" id="code-where"></div>
+  <div class="card">
+    <h3 style="margin-top:0">Endpoints</h3>
+    <table id="code-table"></table>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0">A minimal Python client</h3>
+    <pre id="code-client"></pre>
+    <div class="precap"><button class="btn small" data-copy="code-client">Copy</button></div>
+  </div>
+</section>
+</main>
+</div>
+
+<script>
+"use strict";
+// ------------------------------------------------------------------ config and transport
+// Served by the API at /v1/playground: calls go straight to the same server ("direct").
+// The hosted copy (deploy/playground) injects window.PLAYGROUND = {mode: "relay", apiHint: ...}: calls go through
+// /api/call, and a relay worker on the cluster forwards them to the API.
+const CFG = Object.assign({mode: "direct", apiHint: null}, window.PLAYGROUND || {});
+const RELAY = CFG.mode === "relay";
+const API_SHOWN = RELAY ? (CFG.apiHint || "http://<server>:8000") : location.origin;
+
+async function call(method, path, {query = null, body = null} = {}) {
+  const t0 = performance.now();
+  if (!RELAY) {
+    const qs = query ? "?" + new URLSearchParams(query) : "";
+    const r = await fetch(path + qs, {method, headers: body ? {"Content-Type": "application/json"} : {},
+                                      body: body ? JSON.stringify(body) : undefined});
+    const txt = await r.text();
+    return {status: r.status, body: parse(txt), requestId: r.headers.get("X-Request-Id"), ms: performance.now() - t0};
+  }
+  let r = await fetch("api/call", {method: "POST", headers: {"Content-Type": "application/json"},
+                                   body: JSON.stringify({method, path, query, body})});
+  for (let i = 0; r.status === 202 && i < 8; i++) {          // still running on the cluster: wait for it
+    const {id} = await r.json();
+    r = await fetch("api/result?id=" + encodeURIComponent(id));
+  }
+  if (r.status === 401) { location.href = "login.html?next=" + encodeURIComponent(location.pathname); }
+  if (r.status === 202)
+    return {status: 504, body: {title: "No answer in time", detail: "The model server did not answer within 3 minutes. Please try again."},
+            requestId: null, ms: performance.now() - t0, relay: true};
+  const env = parse(await r.text());
+  if (r.status === 200 && env && typeof env.status === "number" && "body" in env)
+    return {status: env.status, body: env.body, requestId: env.request_id, ms: performance.now() - t0};
+  return {status: r.status, body: env, requestId: null, ms: performance.now() - t0, relay: true};
+}
+function parse(t) { try { return JSON.parse(t); } catch (e) { return t; } }
+
+// ------------------------------------------------------------------ small DOM helpers
+function h(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (k === "style") e.style.cssText = v; else e.setAttribute(k, v === true ? "" : v);
+  }
+  for (const k of kids.flat()) if (k != null && k !== false) e.append(k instanceof Node ? k : String(k));
+  return e;
+}
+const $ = (s, root = document) => root.querySelector(s);
+const $$ = (s, root = document) => [...root.querySelectorAll(s)];
+const fmt = (x, d = 3) => (typeof x === "number" ? x.toFixed(d) : "–");
+const pct = (x) => (typeof x === "number" ? (100 * x).toFixed(1) + "%" : "–");
+
+// ------------------------------------------------------------------ constants
+const FIELDS = ["Physics", "Computer Science", "Mathematics", "Astrophysics", "EESS & Engineering",
+  "Quantitative Biology & Medicine", "Statistics", "Economics & Finance", "Chemistry", "Other"];
+const LABEL = {problem: "Problem", method: "Method", conditions: "Conditions", result: "Result", claim: "Claim",
+  evidence: "Evidence", original: "Original", edited: "Edited", change: "Change", text: "Text"};
+const TASKS = {
+  forward: {title: "Predict results", path: "/v1/predict/forward", parts: ["problem", "method", "conditions"],
+    lead: "Give the problem, the method and the conditions. The model predicts what the result should look like and ranks published results that fit the prediction: what you could expect, based on similar work."},
+  inverse: {title: "Find a method", path: "/v1/predict/inverse", parts: ["problem", "result"],
+    lead: "Give the problem and the result you want. The model predicts a method that would lead there and ranks published methods and procedures that fit: ideas for an experiment design."},
+  abduction: {title: "Explain results", path: "/v1/predict/abduction", parts: ["result", "conditions"],
+    lead: "Give an observed result and the conditions it was observed under. The model ranks published claims and hypotheses that would explain it."},
+};
+const HINT = {
+  problem: "What question or gap? e.g. Image classifiers overfit on small medical datasets.",
+  method: "Which model, algorithm or technique? e.g. Fine-tuning a pretrained vision transformer with augmentation.",
+  conditions: "Data, scale, setup. e.g. About 5,000 labelled chest X-rays, 80/20 split, five seeds.",
+  result: "What came out, ideally with numbers. e.g. Top-1 accuracy rose from 71.2% to 76.8%.",
+};
+const EX = {
+  forward: [
+    ["Medical imaging", {problem: "Image classifiers overfit on small medical datasets.",
+      method: "Fine-tuning a pretrained vision transformer with strong data augmentation and dropout.",
+      conditions: "About 5,000 labelled chest X-rays, 80/20 train/test split, five random seeds."}],
+    ["Reaction yields", {problem: "Predicting reaction yields from written lab protocols.",
+      method: "Fine-tuning a small language model on the protocol text.",
+      conditions: "About 50,000 Suzuki coupling protocols from US patents, 80/20 split."}],
+    ["Exoplanets", {problem: "Detecting small transiting exoplanets in noisy stellar light curves.",
+      method: "A one-dimensional convolutional neural network trained on phase-folded light curves.",
+      conditions: "Kepler long-cadence data with injected transit signals and labelled threshold crossing events."}],
+  ],
+  inverse: [
+    ["Medical imaging", {problem: "Image classifiers overfit on small medical datasets.",
+      result: "Top-1 accuracy rose from 71.2% to 76.8% over a ResNet-50 baseline on the held-out test set."}],
+    ["Battery materials", {problem: "Solid electrolytes for lithium batteries have low ionic conductivity at room temperature.",
+      result: "The new electrolyte reached an ionic conductivity of 12 mS/cm at 25 degrees Celsius."}],
+  ],
+  abduction: [
+    ["Galaxy rotation", {result: "Galaxy rotation curves stay flat far beyond the visible disk, at about 200 km/s out to 30 kpc.",
+      conditions: "HI 21 cm observations of 40 nearby spiral galaxies with the Very Large Array."}],
+    ["Language models", {result: "Validation loss rose again after 40,000 steps while training loss kept falling.",
+      conditions: "A 125M-parameter transformer trained on a 2 GB text corpus for 100,000 steps."}],
+  ],
+  consistency: [
+    ["Dropout", {claim: "Dropout reduces overfitting in small transformers.",
+      evidence: "On 5 datasets, validation loss fell by 12% with dropout 0.1 versus none."}],
+    ["A contested one", {claim: "Larger batch sizes always improve the final accuracy of image classifiers.",
+      evidence: "Increasing the batch size from 256 to 8192 lowered top-1 accuracy by 2.1 points without learning-rate tuning."}],
+  ],
+  intervention: [
+    ["Language model → graph network", {problem: "Predicting reaction yields from written lab protocols.",
+      method: "Fine-tuning a small language model on the protocol text.",
+      conditions: "About 50,000 Suzuki coupling protocols from US patents, 80/20 split.",
+      _part: "method", _text: "Training a graph neural network on reaction graphs."}],
+    ["Chest X-rays → skin lesions", {problem: "Image classifiers overfit on small medical datasets.",
+      method: "Fine-tuning a pretrained vision transformer with strong data augmentation and dropout.",
+      conditions: "About 5,000 labelled chest X-rays, 80/20 train/test split, five random seeds.",
+      _part: "conditions", _text: "About 10,000 dermoscopy images of skin lesions in seven classes."}],
+  ],
+  edit_check: [
+    ["Flipped direction", {original: "Adding dropout reduced overfitting by 12%.", edited: "Adding dropout increased overfitting by 12%."}],
+    ["Changed number", {original: "The model reached 76.8% top-1 accuracy on ImageNet.", edited: "The model reached 56.8% top-1 accuracy on ImageNet."}],
+    ["Negation", {original: "Pre-training on unlabelled data improved downstream accuracy.", edited: "Pre-training on unlabelled data did not improve downstream accuracy."}],
+  ],
+  ask: [
+    ["Reaction yields", {text: "We want to predict reaction yields from written lab protocols. We fine-tune a small language model on the protocol text. We use about 50,000 Suzuki coupling protocols from US patents with an 80/20 split."}],
+    ["Missing a part", {text: "We want to predict reaction yields from written lab protocols. We fine-tune a small language model on the protocol text."}],
+    ["Galaxies", {text: "Galaxy rotation curves stay flat far beyond the visible disk, at about 200 km/s out to 30 kpc. We measured them with HI 21 cm observations of 40 nearby spiral galaxies with the Very Large Array.", _goal: "abduction"}],
+  ],
+  explore: [["Reaction yield prediction", "graph neural networks for chemical reaction yield prediction"],
+            ["Dark matter halos", "dark matter halo density profiles in simulations"],
+            ["A validation paper", "2403.00015"]],
+};
+
+// ------------------------------------------------------------------ navigation, theme
+let modelLoaded = false;
+function go(id) {
+  if (!$("#s-" + id)) id = "start";
+  if (id === "model" && !modelLoaded) { modelLoaded = true; loadModel(); }
+  $$("nav button").forEach((b) => b.classList.toggle("on", b.dataset.go === id));
+  $$("main section").forEach((s) => s.classList.toggle("on", s.id === "s-" + id));
+  if (location.hash !== "#" + id) history.replaceState(null, "", "#" + id);
+  window.scrollTo(0, 0);
+}
+$$("nav button").forEach((b) => b.addEventListener("click", () => go(b.dataset.go)));
+window.addEventListener("hashchange", () => go(location.hash.slice(1)));
+try { const t = localStorage.getItem("pg-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+$("#theme").addEventListener("click", () => {
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  const cur = document.documentElement.dataset.theme || (dark ? "dark" : "light");
+  const nxt = cur === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = nxt;
+  try { localStorage.setItem("pg-theme", nxt); } catch (e) {}
+});
+
+// ------------------------------------------------------------------ the start page cards
+[["ask", "Ask in plain words", "Write a few sentences; the server works out what you are asking."],
+ ["forward", "Predict results", "Problem + method + conditions → results that similar work found."],
+ ["inverse", "Find a method", "Problem + the result you want → methods that got there."],
+ ["abduction", "Explain results", "A result + its conditions → claims that would explain it."],
+ ["consistency", "Check a claim", "Does the evidence support or challenge the claim?"],
+ ["intervention", "What if…?", "Change the method or setup: how far does the predicted result move?"],
+ ["edit_check", "Spot an edit", "Can the model tell a finding from a subtly altered copy?"],
+ ["explore", "Explore papers", "Search the corpus, open a paper, hide a part, see if the model finds it."]]
+  .forEach(([id, t, p]) => $("#hero").append(h("div", {class: "card", onclick: () => go(id)}, h("h3", {}, t), h("p", {}, p))));
+
+// ------------------------------------------------------------------ the three ranking task panels
+for (const [key, t] of Object.entries(TASKS)) {
+  const s = $("#s-" + key);
+  s.append(h("h2", {}, t.title), h("p", {class: "lead"}, t.lead));
+  const card = h("div", {class: "card"}, h("div", {class: "examples", "data-examples": key}));
+  for (const p of t.parts) card.append(h("label", {class: "f"}, LABEL[p]), h("textarea", {"data-part": p, placeholder: HINT[p]}));
+  card.append(h("div", {"data-options": key}),
+    h("div", {class: "actions"}, h("button", {class: "btn primary", "data-run": key}, "Run"), h("span", {class: "timer"})));
+  s.append(card, h("div", {class: "result"}), h("div", {"data-code": key}));
+}
+
+// ------------------------------------------------------------------ options box
+function optionsBox(el) {
+  const fields = h("div", {class: "fields"}, FIELDS.map((f) => h("label", {}, h("input", {type: "checkbox", value: f}), f)));
+  el.append(h("details", {class: "opts"}, h("summary", {}, "Options: number of answers, scoring, fields, years"),
+    h("div", {class: "optgrid"},
+      h("div", {}, h("label", {class: "f"}, "Answers"), h("input", {type: "number", min: 1, max: 50, value: 5, "data-o": "top_k"})),
+      h("div", {}, h("label", {class: "f"}, "Scoring"), h("select", {"data-o": "scoring"},
+        h("option", {value: "hybrid"}, "hybrid (default)"), h("option", {value: "jepa"}, "jepa: the model's prediction only"),
+        h("option", {value: "text"}, "text: text similarity only"), h("option", {value: "bm25"}, "bm25: keywords only"))),
+      h("div", {}, h("label", {class: "f"}, "Year from"), h("input", {type: "number", min: 1990, max: 2026, placeholder: "any", "data-o": "year_from"})),
+      h("div", {}, h("label", {class: "f"}, "Year to"), h("input", {type: "number", min: 1990, max: 2026, placeholder: "any", "data-o": "year_to"}))),
+    h("label", {class: "f"}, "Only these fields ", h("small", {}, "(none ticked = all)")), fields));
+}
+$$("[data-options]").forEach(optionsBox);
+function readOptions(sec) {
+  const box = $("[data-options]", sec);
+  if (!box) return undefined;
+  const v = (k) => $(`[data-o="${k}"]`, box).value;
+  const o = {top_k: Math.max(1, Math.min(50, parseInt(v("top_k"), 10) || 5)), scoring: v("scoring")};
+  const f = {};
+  const fields = $$(".fields input:checked", box).map((i) => i.value);
+  if (fields.length) f.fields = fields;
+  if (v("year_from")) f.year_from = parseInt(v("year_from"), 10);
+  if (v("year_to")) f.year_to = parseInt(v("year_to"), 10);
+  if (Object.keys(f).length) o.filters = f;
+  return o;
+}
+
+// ------------------------------------------------------------------ examples
+$$("[data-examples]").forEach((box) => {
+  const key = box.dataset.examples, sec = box.closest("section");
+  box.append("Try: ");
+  for (const [name, ex] of EX[key] || []) {
+    box.append(h("button", {class: "chip", onclick: () => {
+      if (key === "explore") { $("#ex-q").value = ex; return search(); }
+      for (const [p, v] of Object.entries(ex)) { const t = $(`[data-part="${p}"]`, sec); if (t) t.value = v; }
+      if (ex._part) { $("#int-part").value = ex._part; $("#int-text").value = ex._text; }
+      if (key === "ask") $("#ask-goal").value = ex._goal || "";
+      $$(".invalid", sec).forEach((e) => e.classList.remove("invalid"));
+    }}, name));
+  }
+});
+
+// ------------------------------------------------------------------ code snippets
+function pyLit(v, ind = 0) {
+  const pad = "    ".repeat(ind + 1), end = "    ".repeat(ind);
+  if (v === null || v === undefined) return "None";
+  if (v === true) return "True"; if (v === false) return "False";
+  if (typeof v === "number") return String(v);
+  if (typeof v === "string") return JSON.stringify(v);
+  if (Array.isArray(v)) return v.length ? "[" + v.map((x) => pyLit(x, ind)).join(", ") + "]" : "[]";
+  const ks = Object.keys(v);
+  if (!ks.length) return "{}";
+  return "{\n" + ks.map((k) => pad + JSON.stringify(k) + ": " + pyLit(v[k], ind + 1)).join(",\n") + ",\n" + end + "}";
+}
+function snippets(method, path, query, body) {
+  const qs = query ? "?" + new URLSearchParams(query) : "";
+  const base = RELAY ? "$SCIJEPA_API" : API_SHOWN;
+  let curl = `curl -s ${method !== "GET" ? "-X " + method + " " : ""}"${base}${path}${qs}"`;
+  if (body) curl += ` \\\n  -H "Content-Type: application/json" \\\n  -d '${JSON.stringify(body, null, 2).replace(/'/g, "'\\''")}'`;
+  if (RELAY) curl = `export SCIJEPA_API=${API_SHOWN}   # reachable from the TIB network\n` + curl;
+  let py = `import requests\n\nAPI = "${API_SHOWN}"\n`;
+  const fn = method.toLowerCase();
+  const args = [`f"{API}${path}"`];
+  if (query) args.push("params=" + pyLit(query));
+  if (body) args.push("json=" + pyLit(body));
+  args.push("timeout=120");
+  py += `r = requests.${fn}(${args.join(", ")})\n`;
+  py += `r.raise_for_status()\nprint(r.json())`;
+  if (method === "DELETE") py = py.replace("print(r.json())", "print(r.status_code)");
+  return {curl, py};
+}
+function codeBox(target, method, path, query, body, res) {
+  const {curl, py} = snippets(method, path, query, body);
+  const panes = {"curl": curl, "Python": py, "Response": typeof res.body === "string" ? res.body : JSON.stringify(res.body, null, 2)};
+  const pre = h("pre", {});
+  const tabs = h("div", {class: "tabs"});
+  let cur = "curl";
+  const show = (k) => { cur = k; pre.textContent = panes[k]; $$("button", tabs).forEach((b) => b.classList.toggle("on", b.textContent === k)); };
+  for (const k of Object.keys(panes)) tabs.append(h("button", {onclick: () => show(k)}, k));
+  const meta = [`HTTP ${res.status}`, `${Math.round(res.ms)} ms`, res.requestId ? `request ${res.requestId}` : null].filter(Boolean).join(" · ");
+  const copy = h("button", {class: "btn small", onclick: (e) => copyText(panes[cur], e.target)}, "Copy");
+  target.replaceChildren(h("details", {class: "code"}, h("summary", {}, `Show the API call: ${method} ${path}  (${meta})`),
+    tabs, pre, h("div", {class: "precap"}, copy)));
+  show("curl");
+}
+function copyText(t, btn) {
+  navigator.clipboard.writeText(t).then(() => { const o = btn.textContent; btn.textContent = "Copied"; setTimeout(() => btn.textContent = o, 1200); },
+    () => { btn.textContent = "Select and copy by hand"; });
+}
+$$("[data-copy]").forEach((b) => b.addEventListener("click", () => copyText($("#" + b.dataset.copy).textContent, b)));
+
+// ------------------------------------------------------------------ running a request
+async function run(sec, method, path, {query, body} = {}, {codeKey} = {}) {
+  const btn = $(".actions .btn.primary", sec) || $("#ex-go");
+  const timer = $(".timer", sec);
+  $$(".invalid", sec).forEach((e) => e.classList.remove("invalid"));
+  if (btn) btn.disabled = true;
+  const t0 = Date.now();
+  const tick = setInterval(() => { if (timer) timer.textContent = `waiting for the model… ${Math.round((Date.now() - t0) / 1000)} s`; }, 500);
+  try {
+    const res = await call(method, path, {query, body});
+    const code = $(`[data-code="${codeKey || sec.id.slice(2)}"]`, sec);
+    if (code) codeBox(code, method, path, query, body, res);
+    if (timer) timer.textContent = res.status < 400 ? `answered in ${(res.ms / 1000).toFixed(1)} s` : "";
+    return res;
+  } catch (e) {
+    if (timer) timer.textContent = "";
+    return {status: 0, body: {title: "Network error", detail: String(e)}};
+  } finally { clearInterval(tick); if (btn) btn.disabled = false; }
+}
+function problem(res, sec) {
+  const b = (res.body && typeof res.body === "object") ? res.body : {title: String(res.body || "Error")};
+  const box = h("div", {class: "msg err"}, h("b", {}, b.title || `HTTP ${res.status}`), b.detail ? h("div", {}, b.detail) : null);
+  if (Array.isArray(b.errors) && b.errors.length) {
+    box.append(h("ul", {}, b.errors.map((e) => h("li", {}, e.field ? h("code", {}, e.field) : null, e.field ? ": " : "",
+      e.message || e.code, e.hint ? h("div", {class: "muted"}, e.hint) : null))));
+    for (const e of b.errors) {                       // mark the field the error is about
+      const part = String(e.field || "").split(".").pop();
+      const el = sec && $(`[data-part="${part}"]`, sec);
+      if (el) el.classList.add("invalid");
+    }
+  }
+  if (res.status === 429 || res.status === 503) box.append(h("div", {class: "muted"}, "Please try again in a moment."));
+  return box;
+}
+function warnings(body) {
+  const ws = (body.warnings || []).filter((w) => w.code !== "snippets_only");
+  const out = [];
+  if (ws.length) out.push(h("div", {class: "msg warn"}, ws.map((w) => h("div", {}, w.message))));
+  return out;
+}
+function notes(body) {
+  const ns = [...(body.notes || [])];
+  if ((body.warnings || []).some((w) => w.code === "snippets_only")) ns.push("Answer texts are short snippets of the knowledge units.");
+  if (body.attribution) ns.push(body.attribution);
+  return ns.length ? h("div", {class: "notes"}, ns.map((n) => h("p", {}, n))) : null;
+}
+function gather(sec, parts) {
+  const o = {};
+  for (const p of parts) { const v = $(`[data-part="${p}"]`, sec).value.trim(); if (v) o[p] = v; }
+  return o;
+}
+
+// ------------------------------------------------------------------ rendering answers
+function paperLine(p) {
+  if (!p) return [];
+  const id = p.arxiv_id ? h("a", {href: "https://arxiv.org/abs/" + p.arxiv_id, target: "_blank", rel: "noopener"}, "arXiv:" + p.arxiv_id)
+                        : h("span", {}, p.paper_id);
+  return [id, p.year != null ? h("span", {}, p.year) : null,
+    h("span", {}, p.subfield && p.subfield !== p.field ? `${p.field} › ${p.subfield}` : (p.field || "")),
+    h("span", {class: "tag " + (p.split || "")}, p.split || "–"),
+    h("button", {class: "btn link", onclick: () => openPaper(p.paper_id)}, "open paper")].filter((x) => x != null);
+}
+function answerCard(a, maxScore, isTruth) {
+  const sc = a.scores || {};
+  const w = maxScore > 0 ? Math.max(4, 100 * (a.score || 0) / maxScore) : 0;
+  const src = a.source || {};
+  return h("div", {class: "answer" + (isTruth ? " truth" : "")},
+    h("div", {class: "top"}, h("span", {class: "rank"}, a.rank != null ? "#" + a.rank : "•"),
+      h("div", {class: "txt"}, a.text, a.truncated ? " …" : ""),
+      a.score != null ? h("div", {class: "bar", title: `score ${fmt(a.score)}`}, h("b", {style: `width:${w}%`})) : null),
+    h("div", {class: "meta"}, src.type ? h("span", {class: "tag"}, src.type) : null, ...paperLine(src.paper),
+      a.score != null ? h("span", {title: "hybrid = 0.6 jepa + 0.3 text + 0.1 bm25, each scaled within this request"},
+        `score ${fmt(a.score)} · jepa ${fmt(sc.jepa)} · text ${fmt(sc.text)} · bm25 ${fmt(sc.bm25, 1)}`) : null,
+      isTruth ? h("b", {style: "color:var(--ok)"}, "✓ the paper's own answer") : null));
+}
+function answersList(list, truthIds) {
+  if (!list || !list.length) return h("div", {class: "msg info"}, "No answers. Try other wording, or remove filters.");
+  const mx = Math.max(...list.map((a) => a.score || 0));
+  return h("div", {}, list.map((a) => answerCard(a, mx, truthIds && truthIds.has((a.source || {}).ku_id))));
+}
+function understood(list) {
+  if (!list || !list.length) return null;
+  return h("div", {class: "card"}, h("div", {class: "muted", style: "font-size:13px"}, "What the server read"),
+    h("div", {class: "understood"}, list.map((u) => h("div", {}, h("b", {}, LABEL[u.part] || u.part), ": ",
+      typeof u.text === "object" ? `${u.text.part} → ${u.text.text}` : u.text,
+      u.confidence != null ? h("span", {class: "conf"}, `  (confidence ${u.confidence.toFixed(2)})`) : null))));
+}
+function renderBody(task, b) {
+  if (task === "consistency") return consistencyView(b);
+  if (task === "intervention") return interventionView(b);
+  if (task === "edit_check") return editView(b);
+  return h("div", {}, h("h3", {style: "margin:14px 0 4px"}, {forward: "Results that fit", inverse: "Methods that fit",
+    abduction: "Explanations that fit"}[task] || "Answers"), answersList(b.answers));
+}
+function consistencyView(b) {
+  const p = b.probabilities || {};
+  const side = (k) => h("div", {}, h("h4", {}, k === "supports" ? "Related evidence that supports it" : "Related evidence that challenges it"),
+    ((b.related_evidence || {})[k] || []).length
+      ? b.related_evidence[k].map((e) => answerCard({text: e.text, truncated: e.truncated, source: e.source, rank: null}, 0))
+      : h("div", {class: "muted"}, "None among the related evidence."));
+  return h("div", {}, h("div", {class: "card"},
+    h("div", {class: "muted"}, "The model says the evidence"),
+    h("div", {class: "verdict " + b.verdict}, b.verdict === "supports" ? "supports the claim" : "challenges the claim"),
+    h("div", {}, `supports ${pct(p.supports)} · challenges ${pct(p.challenges)}`),
+    h("div", {class: "meter"}, h("b", {style: `width:${100 * (p.challenges || 0)}%;background:var(--bad)`}))),
+    h("div", {class: "split"}, side("supports"), side("challenges")));
+}
+function interventionView(b) {
+  const s = Math.max(0, Math.min(1, b.shift || 0));
+  return h("div", {}, h("div", {class: "card"},
+    h("div", {class: "muted"}, "How far the predicted result moved"),
+    h("div", {class: "big"}, fmt(b.shift, 2)),
+    h("div", {class: "meter"}, h("b", {style: `width:${100 * s}%`})),
+    h("div", {class: "muted", style: "font-size:13px"}, b.shift_meaning || "")),
+    h("div", {class: "split"}, h("div", {}, h("h4", {}, "Before the change"), answersList(b.before)),
+      h("div", {}, h("h4", {}, "After the change"), answersList(b.after))));
+}
+function editView(b) {
+  return h("div", {class: "card"},
+    h("div", {class: "verdict " + (b.separated ? "supports" : "challenges")}, b.separated ? "The model tells them apart" : "The model does not tell them apart"),
+    h("dl", {class: "kv"}, h("dt", {}, "Kind of edit"), h("dd", {}, b.edit_kind || "–"),
+      h("dt", {}, "Margin"), h("dd", {}, fmt(b.margin, 4)),
+      h("dt", {}, "Rule"), h("dd", {}, b.mode === "representation_distance" ? "distance between the two findings (no context given)" : (b.mode || "–")),
+      ...Object.entries(b).filter(([k, v]) => !["status", "edit_kind", "margin", "mode", "separated", "warnings", "notes", "model", "attribution"].includes(k) && typeof v !== "object")
+        .flatMap(([k, v]) => [h("dt", {}, k.replace(/_/g, " ")), h("dd", {}, typeof v === "number" ? fmt(v, 4) : String(v))])));
+}
+
+// ------------------------------------------------------------------ task buttons
+async function runTask(key) {
+  const sec = $("#s-" + key), out = $(".result", sec);
+  let path, body;
+  if (TASKS[key]) { path = TASKS[key].path; body = {parts: gather(sec, TASKS[key].parts), options: readOptions(sec)}; }
+  else if (key === "consistency") {
+    path = "/v1/consistency";
+    body = {parts: gather(sec, ["claim", "evidence"]), related: Math.max(0, Math.min(10, parseInt($("#cons-related").value, 10) || 0))};
+  } else if (key === "intervention") {
+    path = "/v1/intervention";
+    body = {parts: gather(sec, ["problem", "method", "conditions"]), change: {part: $("#int-part").value, text: $("#int-text").value.trim()},
+            options: readOptions(sec)};
+  } else if (key === "edit_check") {
+    path = "/v1/edit-check";
+    body = {original: $('[data-part="original"]', sec).value.trim(), edited: $('[data-part="edited"]', sec).value.trim()};
+    const ctx = {};
+    for (const p of ["problem", "method", "conditions"]) { const v = $(`[data-part="ctx-${p}"]`, sec).value.trim(); if (v) ctx[p] = v; }
+    if (Object.keys(ctx).length) body.context = ctx;
+  }
+  out.replaceChildren(h("div", {class: "muted"}, "…"));
+  const res = await run(sec, "POST", path, {body});
+  if (res.status !== 200) return out.replaceChildren(problem(res, sec));
+  out.replaceChildren(...warnings(res.body), renderBody(key, res.body), notes(res.body) || "");
+}
+$$("[data-run]").forEach((b) => b.addEventListener("click", () => runTask(b.dataset.run)));
+$$("section textarea, #ex-q").forEach((t) => t.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { const b = $(".actions .btn.primary", t.closest("section")); if (b) b.click(); }
+}));
+
+// ------------------------------------------------------------------ ask: free text with follow-up questions
+let session = null;
+async function ask() {
+  const sec = $("#s-ask"), out = $("#ask-out");
+  const body = {text: $("#ask-text").value.trim(), options: readOptions(sec)};
+  if ($("#ask-goal").value) body.goal = $("#ask-goal").value;
+  out.replaceChildren(h("div", {class: "muted"}, "…"));
+  showAsk(await run(sec, "POST", "/v1/ask", {body}));
+}
+async function answerMissing(form) {
+  const sec = $("#s-ask"), answers = {};
+  for (const t of $$("textarea[data-missing]", form)) if (t.value.trim()) answers[t.dataset.missing] = t.value.trim();
+  showAsk(await run(sec, "POST", `/v1/sessions/${encodeURIComponent(session)}/answers`, {body: {answers}}));
+}
+function showAsk(res) {
+  const out = $("#ask-out");
+  if (res.status !== 200) return out.replaceChildren(problem(res, $("#s-ask")));
+  const b = res.body;
+  session = b.session;
+  $("#ask-reset").hidden = !session;
+  const kids = [...warnings(b), understood(b.understood)];
+  if (b.status === "need_more") {
+    const form = h("div", {class: "card"}, h("b", {}, "The server needs a bit more for the task “" + b.task + "”:"));
+    for (const m of b.missing || []) {
+      const ta = h("textarea", {"data-missing": m.part, placeholder: m.example ? "e.g. " + m.example : ""});
+      form.append(h("div", {class: "missing"}, h("div", {class: "q"}, m.question || `Please add the ${m.part}.`),
+        h("div", {class: "muted", style: "font-size:13px"}, `${LABEL[m.part] || m.part}: ${String(m.reason || "").replace(/_/g, " ")}`),
+        ta, m.example ? h("button", {class: "btn link", style: "font-size:13px", onclick: () => { ta.value = m.example; }}, "use the example") : null));
+    }
+    form.append(h("div", {class: "actions"}, h("button", {class: "btn primary", onclick: () => answerMissing(form)}, "Send")));
+    kids.push(form);
+  } else {
+    kids.push(h("div", {class: "muted", style: "font-size:13px"}, "Task: " + b.task), renderBody(b.task, b));
+    const n = notes(b); if (n) kids.push(n);
+  }
+  out.replaceChildren(...kids.filter(Boolean));
+}
+$("#ask-go").addEventListener("click", ask);
+$("#ask-reset").addEventListener("click", async () => {
+  if (session) call("DELETE", `/v1/sessions/${encodeURIComponent(session)}`).catch(() => {});
+  session = null; $("#ask-out").replaceChildren(); $("#ask-reset").hidden = true; $('[data-code="ask"]').replaceChildren();
+});
+
+// ------------------------------------------------------------------ explore: search, open a paper, hide a part
+async function search() {
+  const sec = $("#s-explore"), q = $("#ex-q").value.trim();
+  if (!q) return;
+  $("#ex-paper").replaceChildren();
+  const res = await run(sec, "GET", "/v1/papers/search", {query: {q, limit: 10}}, {codeKey: "explore"});
+  if (res.status !== 200) return $("#ex-list").replaceChildren(problem(res, sec));
+  const items = res.body.items || [];
+  $("#ex-list").replaceChildren(h("div", {class: "card"},
+    h("div", {class: "muted", style: "font-size:13px"}, (res.body.notes || []).join(" ")),
+    items.length ? h("table", {}, h("tr", {}, h("th", {}, "Paper"), h("th", {}, "Year"), h("th", {}, "Field"), h("th", {}, "Split"), h("th", {}, "")),
+      items.map((p) => h("tr", {}, h("td", {}, p.arxiv_id ? h("a", {href: "https://arxiv.org/abs/" + p.arxiv_id, target: "_blank", rel: "noopener"}, p.arxiv_id) : p.paper_id),
+        h("td", {}, p.year), h("td", {}, p.subfield || p.field), h("td", {}, h("span", {class: "tag " + p.split}, p.split)),
+        h("td", {}, h("button", {class: "btn small", onclick: () => openPaper(p.paper_id)}, "Open")))))
+      : h("div", {class: "muted"}, "No papers found.")));
+}
+$("#ex-go").addEventListener("click", search);
+$("#ex-q").addEventListener("keydown", (e) => { if (e.key === "Enter") search(); });
+
+const KU_ORDER = ["context", "question", "method", "procedure", "result", "evidence", "claim"];
+async function openPaper(id) {
+  go("explore");
+  const sec = $("#s-explore"), out = $("#ex-paper");
+  out.replaceChildren(h("div", {class: "muted"}, "Loading paper " + id + " …"));
+  const res = await run(sec, "GET", "/v1/papers/" + id, {}, {codeKey: "explore"});
+  if (res.status !== 200) return out.replaceChildren(problem(res, sec));
+  const p = res.body, kus = p.knowledge_units || [];
+  const ord = (t) => (KU_ORDER.includes(t) ? KU_ORDER.indexOf(t) : KU_ORDER.length);
+  const types = [...new Set(kus.map((k) => k.type))].sort((a, b) => ord(a) - ord(b));
+  const isVal = p.split === "val";
+  const reveal = h("input", {type: "checkbox", checked: isVal, disabled: !isVal});
+  const goal = h("select", {style: "width:auto"}, h("option", {value: "forward"}, "hide the result (forward)"),
+    h("option", {value: "inverse"}, "hide the method (inverse)"), h("option", {value: "abduction"}, "hide the claim (abduction)"));
+  const testOut = h("div", {});
+  out.replaceChildren(h("div", {class: "card"},
+    h("h3", {style: "margin:0"}, p.arxiv_id ? h("a", {href: "https://arxiv.org/abs/" + p.arxiv_id, target: "_blank", rel: "noopener"}, "arXiv:" + p.arxiv_id) : p.paper_id),
+    h("div", {class: "muted", style: "font-size:14px"}, [p.year, p.field, p.subfield !== p.field ? p.subfield : null].filter(Boolean).join(" · "), " ",
+      h("span", {class: "tag " + p.split}, p.split || "–")),
+    h("div", {class: "card", style: "background:var(--accent-soft);border-color:transparent;margin:12px 0"},
+      h("b", {}, "Test the model on this paper"),
+      h("div", {class: "row", style: "margin-top:6px"}, goal,
+        h("label", {style: "font-size:14px;display:flex;gap:5px;align-items:center"}, reveal, "show where the true answer ranks"),
+        h("button", {class: "btn primary", onclick: async () => {
+          testOut.replaceChildren(h("div", {class: "muted"}, "…"));
+          const body = {paper_id: p.paper_id, goal: goal.value, reveal_truth: reveal.checked, options: {top_k: 5}};
+          const r = await run(sec, "POST", "/v1/ask/paper", {body}, {codeKey: "explore"});
+          if (r.status !== 200) return testOut.replaceChildren(problem(r, sec));
+          const truth = r.body.truth || [];
+          const ids = new Set(truth.map((t) => t.ku_id));
+          testOut.replaceChildren(understood(r.body.understood) || "",
+            truth.length ? h("div", {class: "msg info"}, truth.map((t) => h("div", {}, `The paper's own ${t.type} ranked `, h("b", {}, `#${t.rank}`), ` of ${t.of} candidates.`))) : "",
+            h("h4", {}, "The model's answers"), answersList(r.body.answers, ids), notes(r.body) || "");
+        }}, "Run")),
+      isVal ? null : h("div", {class: "muted", style: "font-size:13px;margin-top:4px"},
+        "The true answer can be shown for validation papers only; test papers stay hidden until the paper's review is complete."),
+      testOut),
+    h("h4", {style: "margin-bottom:0"}, `Knowledge units (${kus.length})`),
+    h("div", {class: "kus"}, types.flatMap((t) => kus.filter((k) => k.type === t).map((k) =>
+      h("div", {class: "ku"}, h("span", {class: "tag"}, t), " ", k.text, k.truncated ? " …" : ""))))));
+  out.scrollIntoView({behavior: "smooth", block: "start"});
+}
+
+// ------------------------------------------------------------------ the model page
+async function loadModel() {
+  const out = $("#model-out");
+  const [info, tasks] = await Promise.all([call("GET", "/v1/info"), call("GET", "/v1/tasks")]);
+  if (info.status !== 200) return out.replaceChildren(problem(info));
+  const i = info.body, m = i.model || {}, a = i.architecture || {}, c = i.checkpoint || {};
+  const card = h("div", {class: "card"}, h("h3", {style: "margin-top:0"}, `${i.name || "Sci-JEPA"} ${i.version || ""}`),
+    h("dl", {class: "kv"},
+      ...[["Model", m.id], ["Graph encoder", a.encoder], ["Text encoder", a.text_encoder], ["Context papers", a.context_papers],
+          ["Training step", c.step ?? m.checkpoint], ["Weights", c.weights || m.weights], ["Corpus version", m.data_version],
+          ["Licence", i.licence], ["Citation", i.citation]]
+        .filter(([, v]) => v != null && v !== "").flatMap(([k, v]) => [h("dt", {}, k), h("dd", {}, String(v))])));
+  const kids = [card];
+  const tm = (i.test_metrics || {}).tasks || {};
+  if (Object.keys(tm).length) {
+    const rows = Object.entries(tm).map(([k, v]) => h("tr", {}, h("td", {}, v.label || k, h("div", {class: "muted", style: "font-size:12px"}, v.query || "")),
+      h("td", {class: "num"}, v.MRR != null ? fmt(v.MRR) : v.bal_acc != null ? fmt(v.bal_acc) + " bal. acc." : "–"),
+      h("td", {class: "num"}, v["Hits@1"] != null ? pct(v["Hits@1"]) : v.acc != null ? pct(v.acc) + " acc." : "–"),
+      h("td", {class: "num"}, v["Hits@10"] != null ? pct(v["Hits@10"]) : "–"),
+      h("td", {class: "num"}, v.chance != null ? fmt(v.chance) : "–"),
+      h("td", {class: "num"}, v.ratio != null ? fmt(v.ratio, 1) + "×" : "–"),
+      h("td", {class: "num"}, v.n ?? "–")));
+    kids.push(h("div", {class: "card"}, h("h3", {style: "margin-top:0"}, "Test results (held-out papers)"),
+      h("div", {style: "overflow:auto"}, h("table", {}, h("tr", {}, ["Task", "MRR", "Hits@1", "Hits@10", "Chance", "× chance", "n"].map((x) => h("th", {}, x))), rows)),
+      h("p", {class: "notes"}, "MRR: mean reciprocal rank of the true knowledge unit among the benchmark candidates. Chance: the MRR of a random ranking. These come from the benchmark protocol, which differs from the corpus-wide search on this page.")));
+  }
+  if (tasks.status === 200) {
+    const t = tasks.body.tasks || {};
+    kids.push(h("div", {class: "card"}, h("h3", {style: "margin-top:0"}, "Tasks and the parts they need"),
+      h("table", {}, Object.entries(t).map(([k, v]) => h("tr", {}, h("td", {}, h("code", {}, k)), h("td", {}, v.question),
+        h("td", {class: "muted"}, (v.requires || []).join(", ")))))));
+  }
+  out.replaceChildren(...kids);
+}
+
+// ------------------------------------------------------------------ the code page
+const ENDPOINTS = [
+  ["POST", "/v1/ask", "Free text → parts → answers, or follow-up questions (a session)"],
+  ["POST", "/v1/sessions/{id}/answers", "Answer the follow-up questions of a session"],
+  ["POST", "/v1/predict/forward", "problem, method, conditions → results"],
+  ["POST", "/v1/predict/inverse", "problem, result → methods"],
+  ["POST", "/v1/predict/abduction", "result, conditions → explanations"],
+  ["POST", "/v1/consistency", "claim, evidence → supports / challenges"],
+  ["POST", "/v1/intervention", "parts + one change → shift of the predicted result"],
+  ["POST", "/v1/edit-check", "original, edited finding → does the model separate them"],
+  ["POST", "/v1/parse", "Split free text into parts (no model call)"],
+  ["POST", "/v1/validate", "Check parts against the input rules (no model call)"],
+  ["GET", "/v1/papers/search?q=", "Search papers by content or arXiv ID"],
+  ["GET", "/v1/papers/{id}", "A paper and its knowledge units"],
+  ["POST", "/v1/ask/paper", "Hide a part of a corpus paper and rank the answers"],
+  ["GET", "/v1/info", "Model card and test metrics"],
+];
+function loadCode() {
+  const where = $("#code-where");
+  if (RELAY) {
+    where.append(h("h3", {style: "margin-top:0"}, "Where the API runs"),
+      h("p", {}, "The API runs on a GPU of the TIB research cluster at ", h("code", {}, API_SHOWN),
+        ". It can be reached from the TIB network (or the TIB VPN). This website forwards your requests to it through a relay, so it works from anywhere, with a stricter rate limit."),
+      h("p", {class: "muted"}, "For scripts and larger runs, call the API directly from the TIB network. Its interactive documentation, with a working example for every endpoint, is at ",
+        h("code", {}, API_SHOWN + "/v1/docs"), "."));
+  } else {
+    where.append(h("h3", {style: "margin-top:0"}, "Where the API runs"),
+      h("p", {}, "This page is served by the API itself at ", h("code", {}, API_SHOWN), "."),
+      h("p", {}, "Interactive documentation with a working example for every endpoint: ", h("a", {href: "/v1/docs", target: "_blank"}, "/v1/docs"),
+        ". OpenAPI file: ", h("a", {href: "/v1/openapi.json", target: "_blank"}, "/v1/openapi.json"), "."));
+  }
+  where.append(h("p", {class: "muted", style: "font-size:13px;margin-bottom:0"},
+    "No API key is needed yet. Limits per client: 60 model calls and 600 other calls per minute; a 429 answer says when to retry. Errors are RFC 9457 JSON with a field, a message and a hint for each problem."));
+  $("#code-table").append(h("tr", {}, h("th", {}, ""), h("th", {}, "Endpoint"), h("th", {}, "What it does")),
+    ...ENDPOINTS.map(([m, p, d]) => h("tr", {}, h("td", {}, h("span", {class: "tag"}, m)), h("td", {}, h("code", {}, p)), h("td", {}, d))));
+  $("#code-client").textContent =
+`import requests
+
+API = "${API_SHOWN}"
+
+def forward(problem, method, conditions, top_k=5, **filters):
+    """What results could one expect? Returns the ranked findings."""
+    body = {"parts": {"problem": problem, "method": method, "conditions": conditions},
+            "options": {"top_k": top_k, **({"filters": filters} if filters else {})}}
+    r = requests.post(f"{API}/v1/predict/forward", json=body, timeout=120)
+    if r.status_code >= 400:                 # RFC 9457: title, and errors[] with field, message, hint
+        raise RuntimeError(r.json())
+    return r.json()["answers"]
+
+for a in forward("Image classifiers overfit on small medical datasets.",
+                 "Fine-tuning a pretrained vision transformer with strong data augmentation.",
+                 "About 5,000 labelled chest X-rays, 80/20 split, five seeds.",
+                 fields=["Computer Science"], year_from=2020):
+    p = a["source"]["paper"]
+    print(f'{a["rank"]:>2}  {a["score"]:.3f}  {p["arxiv_id"] or p["paper_id"]} ({p["year"]})  {a["text"][:100]}')`;
+}
+
+// ------------------------------------------------------------------ status
+async function status() {
+  const pill = $("#status"), txt = $("span", pill);
+  const set = (cls, t, title) => { pill.className = "pill " + cls; txt.textContent = t; pill.title = title || t; };
+  try {
+    if (RELAY) {
+      const s = await (await fetch("api/status")).json();
+      if (!s.worker) return set("bad", "offline", "The model server on the cluster is not connected right now. Please try again later.");
+      if (!s.ready) return set("wait", "starting", "The model server is connected but still loading the model.");
+      return set("ok", "model ready", `Connected ${Math.round(s.age_s)} s ago`);
+    }
+    const r = await call("GET", "/v1/ready");
+    if (r.status === 200) return set("ok", "model ready", "");
+    set(r.body && r.body.status === "failed" ? "bad" : "wait", r.body && r.body.status === "failed" ? "failed" : "loading",
+        r.body && r.body.error ? r.body.error : "The server is loading the model and the corpus index.");
+  } catch (e) { set("bad", "unreachable", String(e)); }
+}
+
+// ------------------------------------------------------------------ start
+loadCode();
+status(); setInterval(status, 30000);
+go(location.hash.slice(1) || "start");
+</script>
+</body>
+</html>

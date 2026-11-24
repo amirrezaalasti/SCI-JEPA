@@ -87,17 +87,85 @@ REQUESTS = {
     },
 }
 
-# Error answers (RFC 9457), shown under their status on the endpoints that can return them.
-# status -> (summary, endpoint it is recorded from, request body or path parameters)
+# Error answers (RFC 9457), recorded per endpoint so each one shows an error that endpoint really gives.
+# endpoint -> {status: (summary, request)}; request holds "body", "path" and "query" as the call needs them.
+# A "session_id" of None means: open a fresh session first (an error that needs a live session).
+_VAGUE_RESULT = "it worked well"
 ERRORS = {
-    "400": ("Parts sent at the top level instead of inside `parts`", "forward",
-            {"problem": FORWARD_PARTS["problem"], "method": FORWARD_PARTS["method"],
-             "conditions": FORWARD_PARTS["conditions"]}),
-    "422": ("A part too vague to search with", "forward",
-            {"parts": {**FORWARD_PARTS, "method": "we did experiments on the data"}}),
-    "403": ("reveal_truth for a training paper", "ask_paper",
-            {"paper_id": "2210.12843", "goal": "forward", "reveal_truth": True}),
-    "404": ("A session that was deleted or expired", "session_get", {"session_id": "ses_doesnotexist"}),
+    "ask": {
+        "400": ("No `text`", {"body": {"goal": "forward"}}),
+        "422": ("A model this server does not serve (Swagger's placeholder \"string\")", {"body": {
+            "text": ASK_TEXT, "goal": "forward", "model": "string"}}),
+    },
+    "parse": {
+        "400": ("No `text`", {"body": {"goal": "forward"}}),
+        "422": ("An unknown goal", {"body": {"text": ASK_TEXT, "goal": "sideways"}}),
+    },
+    "validate": {
+        "400": ("No `task`", {"body": {"parts": FORWARD_PARTS}}),
+        "422": ("An unknown task", {"body": {"task": "sideways", "parts": FORWARD_PARTS}}),
+    },
+    "forward": {
+        "400": ("Parts sent at the top level instead of inside `parts`", {"body": dict(FORWARD_PARTS)}),
+        "422": ("A part too vague to search with", {"body": {
+            "parts": {**FORWARD_PARTS, "method": "we did experiments on the data"}}}),
+    },
+    "inverse": {
+        "400": ("Parts sent at the top level instead of inside `parts`", {"body": {
+            "problem": FORWARD_PARTS["problem"], "result": "Top-1 accuracy rose from 71.2% to 76.8%."}}),
+        "422": ("A result too vague to search with", {"body": {"parts": {
+            "problem": FORWARD_PARTS["problem"], "result": _VAGUE_RESULT}}}),
+    },
+    "abduction": {
+        "400": ("Parts sent at the top level instead of inside `parts`", {"body": {
+            "result": "Galaxy rotation curves stay flat far beyond the visible disk.",
+            "conditions": FORWARD_PARTS["conditions"]}}),
+        "422": ("A result too vague to search with", {"body": {"parts": {
+            "result": _VAGUE_RESULT, "conditions": FORWARD_PARTS["conditions"]}}}),
+    },
+    "consistency": {
+        "400": ("Parts sent at the top level instead of inside `parts`", {"body": {
+            "claim": "Dropout reduces overfitting in small transformers.",
+            "evidence": "On 5 datasets, validation loss fell by 12% with dropout 0.1 versus none."}}),
+        "422": ("`related` out of range", {"body": {"parts": {
+            "claim": "Dropout reduces overfitting in small transformers.",
+            "evidence": "On 5 datasets, validation loss fell by 12% with dropout 0.1 versus none."}, "related": 1000}}),
+    },
+    "edit_check": {
+        "400": ("No `edited`", {"body": {"original": "Adding dropout reduced overfitting by 12%."}}),
+        "422": ("The edited finding is the same as the original", {"body": {
+            "original": "Adding dropout reduced overfitting by 12%.",
+            "edited": "Adding dropout reduced overfitting by 12%."}}),
+    },
+    "intervention": {
+        "400": ("No `change`", {"body": {"parts": FORWARD_PARTS}}),
+        "422": ("A change to a part that does not exist", {"body": {"parts": FORWARD_PARTS, "change": {
+            "part": "colour", "text": "Training a graph neural network on reaction graphs."}}}),
+    },
+    "session_answers": {
+        "400": ("Answers sent at the top level instead of inside `answers`", {
+            "path": {"session_id": None}, "body": {"conditions": "About 50,000 Suzuki coupling protocols."}}),
+        "404": ("A session that was deleted or expired", {
+            "path": {"session_id": "ses_doesnotexist"},
+            "body": {"answers": {"conditions": "About 50,000 Suzuki coupling protocols from US patents."}}}),
+        "422": ("An answer for a part that does not exist", {"path": {"session_id": None}, "body": {
+            "answers": {"colour": "About 50,000 Suzuki coupling protocols from US patents, 80/20 split."}}}),
+    },
+    "session_get": {"404": ("A session that was deleted or expired", {"path": {"session_id": "ses_doesnotexist"}})},
+    "session_delete": {"404": ("A session that was deleted or expired", {"path": {"session_id": "ses_doesnotexist"}})},
+    "papers_search": {"422": ("An empty query", {"query": {"q": ""}})},
+    "paper": {
+        "404": ("A paper that is not in the corpus", {"path": {"paper_id": "9999.99999"}}),
+        "422": ("Neither an arXiv ID nor a DOI", {"path": {"paper_id": "not-a-paper"}}),
+    },
+    "ku": {"404": ("A KU that does not exist", {"path": {"ku_id": "ku_999999999"}})},
+    "ask_paper": {
+        "400": ("No `paper_id`", {"body": {"goal": "forward"}}),
+        "403": ("reveal_truth for a training paper", {"body": {
+            "paper_id": "2210.12843", "goal": "forward", "reveal_truth": True}}),
+        "404": ("A paper that is not in the corpus", {"body": {"paper_id": "9999.99999", "goal": "forward"}}),
+        "422": ("An unknown goal", {"body": {"paper_id": "2403.00015", "goal": "sideways"}}),
+    },
 }
 
 # GET endpoints: path or query parameters of the documented call.
@@ -155,8 +223,11 @@ def responses(endpoint, errors=None):
                                 for name, v in ok.items()}}
         out["200"] = {"description": "Successful answer", "content": {"application/json": content}}
     for code in errors:
-        e = rec.get("_errors", {}).get(code)
-        out[code] = {"description": ERROR_TEXT[code], "content": {"application/problem+json": {"example": e} if e else {}}}
+        e = rec.get("_errors", {}).get(endpoint, {}).get(code)
+        content = {"example": e} if e else {}
+        if e and code in ERRORS.get(endpoint, {}):
+            content = {"examples": {code: {"summary": ERRORS[endpoint][code][0], "value": e}}}
+        out[code] = {"description": ERROR_TEXT[code], "content": {"application/problem+json": content}}
     return out
 
 
@@ -179,8 +250,10 @@ def keep_nulls(spec):
                 for k, v in c.get("application/json", {}).get("examples", {}).items():
                     if k in rec.get(name, {}):
                         v["value"] = rec[name][k]
-                if "example" in c.get("application/problem+json", {}) and code in rec.get("_errors", {}):
-                    c["application/problem+json"]["example"] = rec["_errors"][code]
+                err = rec.get("_errors", {}).get(name, {}).get(code)
+                for v in c.get("application/problem+json", {}).get("examples", {}).values():
+                    if err is not None:
+                        v["value"] = err
     return spec
 
 

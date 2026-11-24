@@ -5,6 +5,8 @@ In this version: every endpoint of sections 2-6, the input checks of section 7, 
 X-Request-Id, in-memory sessions with expiry and DELETE, and (sci_jepa/api/guard.py) the robustness
 layer for one GPU: a bounded GPU queue with 503 + Retry-After, CUDA out-of-memory recovery, rate
 limits with RateLimit-* headers, Idempotency-Key, a request-body size limit, CORS and GET /metrics.
+Every call, with its request and its answer, goes to the call log (sci_jepa/api/calllog.py), which the
+dashboard's "API calls" tab shows (apicalls.html).
 Not yet: login and API keys (section 8), async jobs, the dashboard (9) and the model-quality
 monitoring of section 10.
 Run with `sci-jepa api --model <model folder>` (see sci_jepa/api/__main__.py).
@@ -15,18 +17,21 @@ import re
 import secrets
 import threading
 import time
+import traceback
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path as FilePath
 
 from typing import Annotated
 
 from fastapi import Body, FastAPI, Path, Query, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, PlainTextResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from sci_jepa.api import examples as X
+from sci_jepa.api.calllog import CallLog, decode_body, summarise
 from sci_jepa.api import guard as G
 from sci_jepa.api import schemas as M
 from sci_jepa.api import textparts as T
@@ -34,6 +39,7 @@ from sci_jepa.api.engine import ATTRIBUTION, NotFound, NotReady
 
 log = logging.getLogger("sci_jepa.api")
 RANK_NOTE = "Ranked by fit to published findings; not a fact check."
+PLAYGROUND = FilePath(__file__).with_name("playground.html")   # the researchers' page; also hosted (deploy/playground)
 ARXIV_ID = re.compile(r"^\d{4}\.\d{4,5}(v\d+)?$|^[a-z\-]+(\.[A-Z]{2})?/\d{7}(v\d+)?$")
 CORPUS_ID = re.compile(r"^p_\d+$")                     # corpus papers without an arXiv ID
 DOI = re.compile(r"^10\.\d{4,9}/\S+$")                 # specification 7a; the index holds no DOIs yet
@@ -142,8 +148,9 @@ def _iso(t):
 
 
 # ==================================================================== app
-def create_app(engine, session_ttl=24 * 3600, load_in_background=True, limits=None):
+def create_app(engine, session_ttl=24 * 3600, load_in_background=True, limits=None, call_log=None):
     L = limits or G.Limits()
+    calls = call_log or CallLog(scrub=T.scrub_pii, log=log.warning)     # in memory only without a dashboard folder
 
     def on_fault(msg):                                   # a broken CUDA context: not ready from now on
         engine.state["error"] = f"gpu_fault: {msg}"
@@ -172,19 +179,23 @@ def create_app(engine, session_ttl=24 * 3600, load_in_background=True, limits=No
                   docs_url="/v1/docs", openapi_url="/v1/openapi.json", redoc_url=None, lifespan=lifespan)
     app.state.engine, app.state.sessions = engine, Sessions(session_ttl, L.max_sessions)
     app.state.gate, app.state.limiter, app.state.idempotency, app.state.metrics = gate, limiter, idem, metrics
-    app.state.limits = L
+    app.state.limits, app.state.call_log = L, calls
     base_openapi = app.openapi
     app.openapi = lambda: X.keep_nulls(base_openapi())   # examples keep their null values (see examples.py)
 
     # ---------------------------------------------------------------- middleware and handlers
     @app.middleware("http")
     async def front_door(request: Request, call_next):
-        """Request ID, rate limit, Idempotency-Key, metrics and the access log (never the user's text)."""
+        """Request ID, rate limit, Idempotency-Key, metrics, the access log (never the user's text) and the
+        call log (calllog.py: request and answer in detail, for the dashboard)."""
         rid = request.headers.get("X-Request-Id", "")
         request.state.request_id = rid if G.REQUEST_ID.match(rid) else f"req_{uuid.uuid4().hex[:16]}"
-        t0, path, extra = time.monotonic(), request.url.path, {}
+        t0, wall, path, extra, tb = time.monotonic(), time.time(), request.url.path, {}, None
         client = G.client_id(request, L.trust_proxy)
+        req_raw = b""
         try:
+            if request.method in ("POST", "PUT", "PATCH"):
+                req_raw = await request.body()           # buffered by BodyLimit already; the route reads it again
             resp = None
             bucket = G.bucket_of(request.method, path)
             r = limiter.hit(client, bucket) if bucket else None
@@ -201,8 +212,10 @@ def create_app(engine, session_ttl=24 * 3600, load_in_background=True, limits=No
                 resp = await call_next(request)
         except Exception:
             log.exception("unhandled error in %s", path)
+            tb = traceback.format_exc()
             resp = _problem_response(request, 500, "Internal error", "internal_error",
                                      f"Quote request ID {request.state.request_id} when reporting this.")
+        resp, resp_raw = await _buffered(resp)
         resp.headers["X-Request-Id"] = request.state.request_id
         for k, v in extra.items():
             resp.headers[k] = v
@@ -211,7 +224,43 @@ def create_app(engine, session_ttl=24 * 3600, load_in_background=True, limits=No
         dt = time.monotonic() - t0
         metrics.observe(G.route_label(path), request.method, resp.status_code, dt)
         log.info("%s %s %s %.0fms %s", request.method, path, resp.status_code, 1000 * dt, request.state.request_id)
+        try:
+            _log_call(request, resp, req_raw, resp_raw, client, wall, dt,
+                      tb or getattr(request.state, "traceback", None))
+        except Exception:                                # the call log must never fail a request
+            log.exception("call log failed for %s", request.state.request_id)
         return resp
+
+    async def _buffered(resp):
+        """The response with its body in memory (answers are small JSON) -> (response, body bytes)."""
+        body = getattr(resp, "body", None)
+        if isinstance(body, (bytes, bytearray)):
+            return resp, bytes(body)
+        data = b"".join([c async for c in resp.body_iterator])
+        hdrs = {k: v for k, v in resp.headers.items() if k.lower() != "content-length"}
+        return Response(data, status_code=resp.status_code, headers=hdrs, background=resp.background), data
+
+    def _log_call(request, resp, req_raw, resp_raw, client, wall, dt, tb):
+        path, status = request.url.path, resp.status_code
+        route = request.scope.get("route")
+        rq, rq_cut = decode_body(req_raw, request.headers.get("content-type"), calls.body_limit)
+        rs, rs_cut = decode_body(resp_raw, resp.headers.get("content-type"), calls.body_limit)
+        e = {"id": request.state.request_id, "ts": wall, "time": _iso(wall), "method": request.method,
+             "path": path, "route": getattr(route, "path", None) or G.route_label(path),
+             "endpoint": getattr(getattr(route, "endpoint", None), "__name__", None),
+             "path_params": dict(request.scope.get("path_params") or {}), "query": dict(request.query_params),
+             "client": client, "user_agent": request.headers.get("user-agent"),
+             "request_headers": calls.headers(request.headers), "request_bytes": len(req_raw),
+             "request_body": calls.prepare(rq), "request_truncated": rq_cut,
+             "status": status, "ms": round(1000 * dt, 1), "response_headers": dict(resp.headers),
+             "response_bytes": len(resp_raw), "response_body": calls.prepare(rs), "response_truncated": rs_cut,
+             "model_id": engine.model_id if engine.state["model_loaded"] else None,
+             "summary": calls.prepare_summary(summarise(path, status, rq, rs))}
+        if status >= 400 and isinstance(rs, dict):
+            e["error"] = {"code": rs.get("code"), "title": rs.get("title"), "detail": rs.get("detail")}
+        if tb:
+            e["traceback"] = tb
+        calls.record(e)
 
     async def _idempotent(request, call_next, client, key):
         if not G.IDEMPOTENCY_KEY.match(key):
@@ -282,6 +331,7 @@ def create_app(engine, session_ttl=24 * 3600, load_in_background=True, limits=No
     @app.exception_handler(Exception)
     async def _e(request, exc):
         log.exception("unhandled error in %s", request.url.path)
+        request.state.traceback = traceback.format_exc()  # for the call log
         return _problem_response(request, 500, "Internal error", "internal_error",
                                  f"Quote request ID {getattr(request.state, 'request_id', '?')} when reporting this.")
 
@@ -414,6 +464,16 @@ def create_app(engine, session_ttl=24 * 3600, load_in_background=True, limits=No
     def tasks():
         return {"tasks": {k: {"question": v["question"], "requires": v["requires"]} for k, v in T.TASKS.items()},
                 "parts": T.PARTS}
+
+    @app.get("/", include_in_schema=False)
+    async def root():
+        return RedirectResponse("/v1/playground")
+
+    @app.get("/v1/playground", include_in_schema=False)
+    async def playground():
+        """A page for researchers to try every task in the browser (playground.html). It calls this server
+        directly; the hosted copy on Vercel reaches it through the relay (sci_jepa/api/relay.py)."""
+        return HTMLResponse(PLAYGROUND.read_text(encoding="utf-8"), headers={"Cache-Control": "no-cache"})
 
     # ---------------------------------------------------------------- 3. main flow
     def understood(parts, conf):

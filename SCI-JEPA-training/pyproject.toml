@@ -36,8 +36,8 @@ sci-jepa = "sci_jepa.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-sci_jepa = ["dashboard/dashboard.html", "dashboard/infra.html", "dashboard/vendor/*.js", "models/placeholder_shapes.json",
-            "api/examples_responses.json"]
+sci_jepa = ["dashboard/dashboard.html", "dashboard/infra.html", "dashboard/apicalls.html", "dashboard/vendor/*.js", "models/placeholder_shapes.json",
+            "api/examples_responses.json", "api/playground.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

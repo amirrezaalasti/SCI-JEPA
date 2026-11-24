@@ -1,0 +1,18 @@
+{
+  "name": "scijepa-playground",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "assemble": "node scripts/assemble.mjs",
+    "typecheck": "tsc -p .",
+    "deploy": "node scripts/assemble.mjs && vercel deploy --prod"
+  },
+  "dependencies": {
+    "@vercel/functions": "^2.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0",
+    "vercel": "^65.7.0"
+  }
+}
