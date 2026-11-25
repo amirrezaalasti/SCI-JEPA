@@ -4,6 +4,10 @@
 #   MODEL=/path/to/models/<exp>/<arm>_seed0 sbatch deploy/api/serve_2080ti.sbatch
 #   MODEL=... INDEX=/path/paper_a_ku_index_<fp>.pt PORT=8000 sbatch deploy/api/serve_2080ti.sbatch
 #
+# Every call (request and answer) is logged to $DASHBOARD (default: <repo>/runs/api/dashboard; DASHBOARD= turns it
+# off) and shown on the dashboard's "API calls" tab. If ~/.config/sci-jepa/push.env (or $SCIJEPA_PUSH_ENV) exists, it
+# is sourced for SCIJEPA_PUSH_URL / SCIJEPA_PUSH_TOKEN and the log is pushed to the hosted dashboard (d/api/).
+#
 # Then, from your machine:  ssh -N -L 8000:<node>:8000 <login host>   and open http://127.0.0.1:8000/v1/docs
 # (the node name is printed at the top of the job log).
 #
@@ -25,14 +29,18 @@ INDEX="${INDEX:-auto}"                 # auto: the index the model was trained o
 PORT="${PORT:-8000}"
 WEIGHTS="${WEIGHTS:-model}"            # model (end of training) or best (best validation epoch)
 EXTRA="${EXTRA:-}"                     # e.g. "--full-texts" (needs much more memory) or "--no-neighbours"
-DASHBOARD="${DASHBOARD:-}"             # e.g. <results>/dashboard: every call, request and answer, on its "API calls" tab
 REPO="${REPO:-${SLURM_SUBMIT_DIR:-$(pwd)}}"
+DASHBOARD="${DASHBOARD-${REPO%/}/runs/api/dashboard}"   # call log folder ("API calls" tab); DASHBOARD= turns it off
+PUSH_ENV="${SCIJEPA_PUSH_ENV:-${HOME}/.config/sci-jepa/push.env}"
+# shellcheck disable=SC1090
+[ -f "${PUSH_ENV}" ] && . "${PUSH_ENV}"  # SCIJEPA_PUSH_URL / SCIJEPA_PUSH_TOKEN: push the call log to the hosted site
 PA="${REPO%/}"; [ -d "${PA}/src/sci_jepa" ] || PA="${PA}/SCI-JEPA-training"
 PY="${PY:-${PA}/.venv/bin/python}"
 export HF_HOME="${HF_HOME:-${HOME}/.cache/huggingface}" HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}"
 export TOKENIZERS_PARALLELISM=false PYTHONUNBUFFERED=1
 
 echo "node $(hostname)  port ${PORT}  gpu ${CUDA_VISIBLE_DEVICES:-?}"
+echo "call log: ${DASHBOARD:-off}  hosted push: ${SCIJEPA_PUSH_URL:-off}"
 echo "tunnel: ssh -N -L ${PORT}:$(hostname):${PORT} <login host>   then http://127.0.0.1:${PORT}/v1/docs"
 "${PY}" -c "import fastapi, uvicorn" 2>/dev/null || {
   echo "fastapi / uvicorn missing: cd ${PA} && uv pip install --python .venv/bin/python -e '.[api]'"; exit 1; }

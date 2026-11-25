@@ -50,7 +50,8 @@ SKIP_TOP = {"index.html", "infra.html", "apicalls.html"}              # served b
 SKIP_DIRS = {"vendor"}
 BATCH_B64 = 3_500_000                                # Vercel function request bodies max out at 4.5 MB
 MAX_RAW = 64 * 1024 * 1024
-KEEP_REMOTE = ("__", "cluster/", "archive/", "runs_archive.json")   # --prune never deletes these (import_logs.py)
+KEEP_REMOTE = ("__", "cluster/", "archive/", "runs_archive.json", "apicalls/")   # --prune never deletes these
+SITE_WIDE = ("apicalls/",)                           # API call log: one place for all folders (every API tab shows it)
 FOLDER_PREFIX = "d/"                                  # d/<results folder>/... on the site
 SQUEUE_FIELDS = ("id", "name", "user", "state", "elapsed", "limit", "nodes", "reason", "partition")
 SQUEUE_FORMAT = "%i|%j|%u|%T|%M|%l|%D|%R|%P"
@@ -192,7 +193,7 @@ def one_round(root, pusher, remote, stat_cache, opts, prefix=""):
     prefix: where this folder goes on the site (folder_prefix); local file rel is stored at prefix + rel."""
     out, seen = [], set()
     for rel, full in walk(root):
-        key_rel = prefix + rel
+        key_rel = rel if rel.startswith(SITE_WIDE) else prefix + rel
         seen.add(key_rel)
         try:
             st = os.stat(full)

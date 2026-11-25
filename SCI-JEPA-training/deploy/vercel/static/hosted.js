@@ -7,13 +7,13 @@
 // same page served at /d/<folder>/ (vercel.json), so the page's relative fetches (runs.json, runs/x/live.json,
 // infra/..., graphs/...) land in that folder. "/" opens the last folder viewed (else DEFAULT_FOLDERS, else
 // the first); the top level (everything pushed before 7 Nov 2026, when S and M runs overwrote each other)
-// stays reachable from the folder menu. cluster/, archive/ and runs_archive.json exist once, for all folders.
+// stays reachable from the folder menu. cluster/, archive/, apicalls/ and runs_archive.json exist once, for all folders.
 (function () {
   var origFetch = window.fetch.bind(window);
   var MANIFEST_EVERY = 5000;
   var DEFAULT_FOLDERS = ["arxiv_full_S"];
   var TOP_LABEL = "top level (before 7 Nov, S and M mixed)";
-  var SHARED = /^(cluster\/|archive\/|runs_archive\.json$)/;
+  var SHARED = /^(cluster\/|archive\/|apicalls\/|runs_archive\.json$)/;   // apicalls/: the API call log
   if (/^\/d\/[^\/]+$/.test(location.pathname)) location.replace(location.pathname + "/" + location.search + location.hash);
   var fm = location.pathname.match(/^\/d\/([^\/]+)\//);
   var FOLDER = fm ? decodeURIComponent(fm[1]) : "";
